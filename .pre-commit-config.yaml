@@ -1,0 +1,22 @@
+repos:
+  # General hygiene
+  - repo: builtin
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      - id: pretty-format-json
+        args: [--autofix, --indent, "2"]
+        exclude: ^frontend/
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: no-commit-to-branch
+        args: [--branch, main]
+      - id: detect-private-key
+
+  # Security
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks                    # detect hardcoded secrets
