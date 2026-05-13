@@ -33,3 +33,12 @@ Temporary Items
 *.icloud
 
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+# Terraform
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+
+
+# Claude Code
+.claude/settings.local.json
