@@ -29,6 +29,20 @@
         "required_review_thread_resolution": false
       },
       "type": "pull_request"
+    },
+    {
+      "parameters": {
+        "required_status_checks": [
+          {
+            "context": "prek"
+          },
+          {
+            "context": "pytest"
+          }
+        ],
+        "strict_required_status_checks_policy": false
+      },
+      "type": "required_status_checks"
     }
   ],
   "target": "branch"
