@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install uv dev packages
-        run: uv sync --dev
+      - name: Install workspace and dev deps
+        run: uv sync --all-packages
 
       - uses: hashicorp/setup-terraform@v3
 
