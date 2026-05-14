@@ -1,3 +1,5 @@
+from openmeteo_sdk import Model
+
 HISTORICAL_FORECAST_BASE_URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 CURRENT_FORECAST_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -21,3 +23,11 @@ FORECAST_MODELS = [
     # preciptation probability  column
     # "ukmo_uk_deterministic_2km",
 ]
+
+
+def model_to_name(code: int) -> str | None:
+    """Translate an Open-Meteo ``Model`` enum code back to its string name."""
+    for name, value in Model.Model.__dict__.items():
+        if value == code:
+            return name
+    return None
