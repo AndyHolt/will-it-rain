@@ -1,0 +1,22 @@
+[project]
+name = "will-it-rain"
+version = "0.1.0"
+description = "Local rain forecasting"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "will_it_rain_shared",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+    "ty>=0.0.35",
+]
+
+[tool.ruff]
+# allow lines to be up to 100 chars
+line-length = 100
