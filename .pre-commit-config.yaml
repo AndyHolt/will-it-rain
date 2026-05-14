@@ -20,3 +20,22 @@ repos:
     rev: v8.24.0
     hooks:
       - id: gitleaks                    # detect hardcoded secrets
+
+  # Python lint and check
+  - repo: local
+    hooks:
+    - id: ruff
+      name: ruff lint
+      language: system
+      entry: uv run ruff check --fix
+      types_or: [python, pyi]
+    - id: ruff-format
+      name: ruff format
+      language: system
+      entry: uv run ruff format
+      types_or: [python, pyi]
+    - id: ty-check
+      name: ty check
+      language: system
+      entry: uv run ty check
+      types_or: [python, pyi]
