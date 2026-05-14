@@ -9,10 +9,13 @@ dependencies = []
 [tool.uv.workspace]
 members = [
     "will_it_rain_shared",
+    "pipeline",
+    "backend",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.0",
     "ruff>=0.15.12",
     "ty>=0.0.35",
 ]
