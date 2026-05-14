@@ -1,7 +1,7 @@
 variable "project_id" {
   type        = string
   description = "GCP project ID that hosts bootstrap resources."
-  default     = "will-it-rain-496215"
+  default     = "will-it-rain-496308"
 }
 
 variable "region" {

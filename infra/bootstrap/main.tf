@@ -60,6 +60,14 @@ resource "google_storage_bucket_iam_member" "tf_state_admin" {
   member = "serviceAccount:${google_service_account.terraform.email}"
 }
 
+# Allow the SA to use the project as a quota/billing project for API requests
+# (required by `user_project_override = true` in the main provider config).
+resource "google_project_iam_member" "tf_service_usage_consumer" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageConsumer"
+  member  = "serviceAccount:${google_service_account.terraform.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Workload Identity Federation for GitHub Actions
 # ---------------------------------------------------------------------------
