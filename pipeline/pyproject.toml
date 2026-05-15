@@ -5,6 +5,8 @@ description = "Training pipeline components for will-it-rain"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "google-cloud-aiplatform>=1.60.0",
+    "google-cloud-storage>=2.18.0",
     "joblib>=1.5.0",
     "lightgbm>=4.6.0",
     "niquests>=3.16.0",
