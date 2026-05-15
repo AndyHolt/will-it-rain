@@ -26,8 +26,13 @@ PIPELINE_IMAGE = (
     "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/pipeline:latest"
 )
 
+# `install_kfp_package=False` on every component: kfp is already installed in
+# the base image via uv, and the uv-managed venv has no `pip`, so KFP's
+# launcher-time `python -m pip install kfp==...` step fails with
+# "No module named pip". Skip it.
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def fetch_forecast_op(
     latitude: float,
     longitude: float,
@@ -44,7 +49,7 @@ def fetch_forecast_op(
     df.to_parquet(forecast.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def fetch_observations_op(
     site_code: str,
     start_date: str,
@@ -58,7 +63,7 @@ def fetch_observations_op(
     df.to_parquet(observations.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def prepare_op(
     forecast: Input[Dataset],
     observations: Input[Dataset],
@@ -75,7 +80,7 @@ def prepare_op(
     joblib.dump(result, prepared.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def train_op(
     prepared: Input[Artifact],
     bundle: Output[Model],
@@ -89,7 +94,7 @@ def train_op(
     save_bundle(trained, bundle.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def evaluate_op(
     prepared: Input[Artifact],
     challenger_bundle: Input[Model],
@@ -138,7 +143,7 @@ def evaluate_op(
     )
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def register_op(
     bundle: Input[Model],
     evaluation: Input[Artifact],
@@ -163,7 +168,7 @@ def register_op(
     return model.versioned_resource_name
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def promote_op(
     registered_model_resource_name: str,
     evaluation: Input[Artifact],
