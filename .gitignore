@@ -38,6 +38,8 @@ Temporary Items
 **/.terraform
 **/*.tfstate
 **/*.tfstate.*
+**/*.tfvars
+!**/*.tfvars.example
 
 
 # Claude Code
