@@ -60,11 +60,12 @@ def will_it_rain_pipeline(
 
     # Gate: evaluate_op returns True iff the challenger should ship. Policy
     # (which baseline must be beaten) is owned by the component, not the DAG.
-    # `== True` is deliberate: evaluate.output is a PipelineParameterChannel,
-    # not a bool, and KFP overloads __eq__ to build a pipeline-time comparison.
-    # A bare `evaluate.output` would be truthy at compile time and the gate
-    # would always fire. Hence the E712 suppression.
-    with dsl.If(evaluate.output == True, name="register-and-promote"):  # noqa: E712
+    # `== True` is deliberate: the channel is a PipelineParameterChannel, not
+    # a bool, and KFP overloads __eq__ to build a pipeline-time comparison.
+    # A bare channel would be truthy at compile time and the gate would always
+    # fire. Hence the E712 suppression. "Output" is KFP's default name for the
+    # function return value when the component also has Output[...] params.
+    with dsl.If(evaluate.outputs["Output"] == True, name="register-and-promote"):  # noqa: E712
         register = register_op(
             bundle=train.outputs["bundle"],
             evaluation=evaluate.outputs["evaluation"],
