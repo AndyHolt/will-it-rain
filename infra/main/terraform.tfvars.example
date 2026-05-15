@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in your real values. terraform.tfvars is
+# gitignored to keep the location/station private.
+
+# Decimal degrees. North/east positive.
+weather_latitude  = 51.50
+weather_longitude = -0.13
+
+# COSMOS UK weather station site code.
+# Browse stations at https://cosmos-api.ceh.ac.uk/python_examples#Site-list
+cosmos_uk_site_code = "<COSMOS_UK_SITE_CODE>"
