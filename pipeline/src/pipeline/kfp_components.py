@@ -6,19 +6,8 @@ The wrapper bodies do the artifact (de)serialisation; the actual logic lives
 in the unwrapped functions in this same package.
 """
 
-from typing import NamedTuple
-
 from kfp import dsl
 from kfp.dsl import Artifact, Dataset, Input, Metrics, Model, Output
-
-
-class EvalOutputs(NamedTuple):
-    """Primitive outputs of evaluate_op, used by pipeline gating conditions."""
-
-    challenger_f1: float
-    baseline_persistence_f1: float
-    baseline_precipitation_f1: float
-    has_champion: bool
 
 
 # Tag is set at submit time by the schedule resource — this is a placeholder.
@@ -103,7 +92,13 @@ def evaluate_op(
     model_display_name: str,
     evaluation: Output[Artifact],
     metrics: Output[Metrics],
-) -> EvalOutputs:
+) -> bool:
+    """Returns True iff the challenger should be registered.
+
+    Gating policy lives here (not in the DAG) so that the per-baseline F1
+    values don't need to be plumbed as separate component outputs — they're
+    still visible via `metrics` and the serialised `evaluation` artifact.
+    """
     import joblib
 
     from pipeline.components.champion import load_champion_bundle
@@ -135,12 +130,9 @@ def evaluate_op(
     if result.champion is not None:
         metrics.log_metric("champion_f1", result.champion.f1)
 
-    return EvalOutputs(
-        challenger_f1=result.challenger.f1,
-        baseline_persistence_f1=result.baselines.persistence.f1,
-        baseline_precipitation_f1=result.baselines.precipitation_threshold.f1,
-        has_champion=result.champion is not None,
-    )
+    # Persistence is the cheapest non-trivial baseline — a model that can't
+    # outperform "assume the next 4h is like the last 4h" isn't worth shipping.
+    return result.challenger.f1 >= result.baselines.persistence.f1
 
 
 @dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
