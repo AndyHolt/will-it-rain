@@ -8,6 +8,7 @@ dependencies = [
     "google-cloud-aiplatform>=1.60.0",
     "google-cloud-storage>=2.18.0",
     "joblib>=1.5.0",
+    "kfp>=2.10.0",
     "lightgbm>=4.6.0",
     "niquests>=3.16.0",
     "numpy>=2.4.0",
