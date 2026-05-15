@@ -44,5 +44,11 @@ upload-pipeline: $(PIPELINE_SPEC)
 # End-to-end: rebuild image, recompile pipeline, upload.
 deploy-pipeline: image upload-pipeline
 
+# Submit a one-off pipeline run via the aiplatform SDK. Reads the compiled
+# spec from $(PIPELINE_SPEC) and private location/site values from .env
+# (see .env-example; .env is gitignored).
+trigger-run: $(PIPELINE_SPEC)
+	uv run --package pipeline python -m pipeline.trigger
+
 clean:
 	rm -rf build/
