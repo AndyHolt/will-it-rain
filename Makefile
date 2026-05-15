@@ -1,6 +1,7 @@
-# Pipeline build / compile / upload recipes.
+# Repo-wide recipes: dev tooling (lint/format/typecheck/test) + pipeline
+# build/compile/upload/trigger.
 #
-# Run from the repo root. Assumes:
+# Run from the repo root. Pipeline-side targets also assume:
 #   - gcloud is authenticated and `gcloud auth configure-docker
 #     europe-west2-docker.pkg.dev` has been run once.
 #   - Docker (with buildx) is running locally.
@@ -14,7 +15,55 @@ IMAGE_NAME       := pipeline
 IMAGE_TAG        ?= latest
 PIPELINE_SPEC    := build/pipeline.yaml
 
-.PHONY: image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean
+.DEFAULT_GOAL := help
+
+.PHONY: help \
+        lint format-check typecheck test check \
+        lint-fix format fix prek \
+        image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean
+
+# ---------------------------------------------------------------------------
+# Dev tooling
+# ---------------------------------------------------------------------------
+
+# Print available targets (anything whose recipe line carries a `## doc`).
+help:
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+# Read-only checks (no mutations) — what CI runs.
+lint: ## ruff lint, no fixes
+	uv run ruff check
+
+format-check: ## ruff format --check, no writes
+	uv run ruff format --check
+
+typecheck: ## ty static type checks
+	uv run ty check
+
+test: ## pytest across the workspace
+	uv run pytest
+
+check: lint format-check typecheck test ## all read-only checks (CI parity)
+
+# Auto-fixers — mutate the working tree.
+lint-fix: ## ruff lint with --fix
+	uv run ruff check --fix
+
+format: ## ruff format (writes)
+	uv run ruff format
+
+fix: lint-fix format ## all auto-fixers
+
+# Run the full prek hook set against every file. Matches what pre-commit
+# enforces locally and what the prek hook job runs in CI.
+prek: ## prek run --all-files
+	prek run --all-files
+
+# ---------------------------------------------------------------------------
+# Pipeline build / compile / deploy
+# ---------------------------------------------------------------------------
+
+## (targets below are documented inline; pipeline ops aren't shown in `make help`)
 
 # Build and push the pipeline component image. Vertex AI workers are x86_64;
 # building on Apple Silicon without --platform produces an arm64 image that
