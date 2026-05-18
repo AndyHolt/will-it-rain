@@ -1,6 +1,13 @@
-"""Load the bundle for the model currently aliased as ``production``."""
+"""Load the bundle for the model currently aliased as ``production``.
+
+Lives in `shared` because both the training pipeline (champion evaluation)
+and the serving backend (startup model load) consume the same bundle. The
+bundle dict keys form the train/serve contract; keeping the loader here
+means there is one place that knows the shape.
+"""
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -12,13 +19,20 @@ from google.cloud import aiplatform, storage
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class Champion:
+    bundle: dict[str, Any]
+    version_id: str
+    resource_name: str
+
+
 def load_champion_bundle(
     *,
     model_display_name: str,
     project: str,
     location: str,
     production_alias: str = "production",
-) -> dict[str, Any] | None:
+) -> Champion | None:
     """Return the joblib-loaded bundle for the @production version, or None.
 
     Returns None on the very first run when no production alias exists yet,
@@ -77,7 +91,11 @@ def load_champion_bundle(
                     uri,
                     production.version_id,
                 )
-                return joblib.load(local_path)
+                return Champion(
+                    bundle=joblib.load(local_path),
+                    version_id=production.version_id,
+                    resource_name=production.resource_name,
+                )
     logger.warning(
         "No .joblib blob found at %s for production version %s.",
         uri,
