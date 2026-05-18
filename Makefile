@@ -14,6 +14,18 @@ IMAGE_REPO       := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME       := pipeline
 IMAGE_TAG        ?= latest
 PIPELINE_SPEC    := build/pipeline.yaml
+IMAGE_SENTINEL   := build/.image-pushed
+
+# Files baked into the pipeline image. If any of these change, the image
+# must be rebuilt before the next Vertex run, otherwise `:latest` will
+# serve stale code. The YAML spec depends on a narrower set (see below)
+# because @dsl.component captures only the wrapper function bodies.
+IMAGE_SOURCES    := pipeline/Dockerfile \
+                    pyproject.toml uv.lock \
+                    pipeline/pyproject.toml \
+                    will_it_rain_shared/pyproject.toml \
+                    $(shell find pipeline/src -name '*.py') \
+                    $(shell find will_it_rain_shared/src -name '*.py')
 
 .DEFAULT_GOAL := help
 
@@ -70,13 +82,20 @@ prek: ## prek run --all-files
 # fails on the Vertex side with "exec format error". buildx + --platform
 # cross-compiles cleanly, and --push uploads directly (no local load step,
 # which doesn't work for cross-platform builds anyway).
-image:
+#
+# The sentinel file records the last successful push. Downstream targets
+# (trigger-run, deploy-pipeline) depend on it so they rebuild + push when
+# any IMAGE_SOURCES file is newer than the sentinel.
+image: $(IMAGE_SENTINEL)
+
+$(IMAGE_SENTINEL): $(IMAGE_SOURCES)
 	docker buildx build \
 	    --platform linux/amd64 \
 	    --push \
 	    --tag $(IMAGE_REPO)/$(IMAGE_NAME):$(IMAGE_TAG) \
 	    --file pipeline/Dockerfile \
 	    .
+	@mkdir -p $(dir $@) && touch $@
 
 # Compile the KFP pipeline definition to YAML (the canonical KFP 2.x IR format;
 # Vertex AI's parser handles JSON output less reliably than YAML).
@@ -93,10 +112,11 @@ upload-pipeline: $(PIPELINE_SPEC)
 # End-to-end: rebuild image, recompile pipeline, upload.
 deploy-pipeline: image upload-pipeline
 
-# Submit a one-off pipeline run via the aiplatform SDK. Reads the compiled
-# spec from $(PIPELINE_SPEC) and private location/site values from .env
-# (see .env-example; .env is gitignored).
-trigger-run: $(PIPELINE_SPEC)
+# Submit a one-off pipeline run via the aiplatform SDK. Depends on both
+# the compiled spec and a current image — without the latter, Vertex would
+# pull a stale :latest and changes to component bodies (e.g. train.py)
+# would silently fail to take effect.
+trigger-run: $(PIPELINE_SPEC) $(IMAGE_SENTINEL)
 	uv run --package pipeline python -m pipeline.trigger
 
 clean:

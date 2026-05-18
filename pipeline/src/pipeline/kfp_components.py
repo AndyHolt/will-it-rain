@@ -6,19 +6,8 @@ The wrapper bodies do the artifact (de)serialisation; the actual logic lives
 in the unwrapped functions in this same package.
 """
 
-from typing import NamedTuple
-
 from kfp import dsl
 from kfp.dsl import Artifact, Dataset, Input, Metrics, Model, Output
-
-
-class EvalOutputs(NamedTuple):
-    """Primitive outputs of evaluate_op, used by pipeline gating conditions."""
-
-    challenger_f1: float
-    baseline_persistence_f1: float
-    baseline_precipitation_f1: float
-    has_champion: bool
 
 
 # Tag is set at submit time by the schedule resource — this is a placeholder.
@@ -26,8 +15,13 @@ PIPELINE_IMAGE = (
     "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/pipeline:latest"
 )
 
+# `install_kfp_package=False` on every component: kfp is already installed in
+# the base image via uv, and the uv-managed venv has no `pip`, so KFP's
+# launcher-time `python -m pip install kfp==...` step fails with
+# "No module named pip". Skip it.
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def fetch_forecast_op(
     latitude: float,
     longitude: float,
@@ -44,7 +38,7 @@ def fetch_forecast_op(
     df.to_parquet(forecast.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def fetch_observations_op(
     site_code: str,
     start_date: str,
@@ -58,7 +52,7 @@ def fetch_observations_op(
     df.to_parquet(observations.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def prepare_op(
     forecast: Input[Dataset],
     observations: Input[Dataset],
@@ -75,7 +69,7 @@ def prepare_op(
     joblib.dump(result, prepared.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def train_op(
     prepared: Input[Artifact],
     bundle: Output[Model],
@@ -89,7 +83,7 @@ def train_op(
     save_bundle(trained, bundle.path)
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def evaluate_op(
     prepared: Input[Artifact],
     challenger_bundle: Input[Model],
@@ -98,7 +92,13 @@ def evaluate_op(
     model_display_name: str,
     evaluation: Output[Artifact],
     metrics: Output[Metrics],
-) -> EvalOutputs:
+) -> bool:
+    """Returns True iff the challenger should be registered.
+
+    Gating policy lives here (not in the DAG) so that the per-baseline F1
+    values don't need to be plumbed as separate component outputs — they're
+    still visible via `metrics` and the serialised `evaluation` artifact.
+    """
     import joblib
 
     from pipeline.components.champion import load_champion_bundle
@@ -130,15 +130,12 @@ def evaluate_op(
     if result.champion is not None:
         metrics.log_metric("champion_f1", result.champion.f1)
 
-    return EvalOutputs(
-        challenger_f1=result.challenger.f1,
-        baseline_persistence_f1=result.baselines.persistence.f1,
-        baseline_precipitation_f1=result.baselines.precipitation_threshold.f1,
-        has_champion=result.champion is not None,
-    )
+    # Persistence is the cheapest non-trivial baseline — a model that can't
+    # outperform "assume the next 4h is like the last 4h" isn't worth shipping.
+    return result.challenger.f1 >= result.baselines.persistence.f1
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def register_op(
     bundle: Input[Model],
     evaluation: Input[Artifact],
@@ -163,7 +160,7 @@ def register_op(
     return model.versioned_resource_name
 
 
-@dsl.component(base_image=PIPELINE_IMAGE)
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def promote_op(
     registered_model_resource_name: str,
     evaluation: Input[Artifact],
