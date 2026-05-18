@@ -1,9 +1,9 @@
-"""Load the bundle for the model currently aliased as ``production``.
+"""Load the model currently aliased as ``production`` from the registry.
 
 Lives in `shared` because both the training pipeline (champion evaluation)
-and the serving backend (startup model load) consume the same bundle. The
-bundle dict keys form the train/serve contract; keeping the loader here
-means there is one place that knows the shape.
+and the serving backend (startup model load) consume the same on-disk
+bundle. Keeping the loader here means there is one place that knows how
+to materialise it back into a TrainedModel.
 """
 
 import logging
@@ -15,26 +15,26 @@ import joblib
 from google.api_core.exceptions import NotFound
 from google.cloud import aiplatform, storage
 
-from will_it_rain_shared.predict import Bundle
+from will_it_rain_shared.predict import TrainedModel
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class Champion:
-    bundle: Bundle
+    trained_model: TrainedModel
     version_id: str
     resource_name: str
 
 
-def load_champion_bundle(
+def load_champion(
     *,
     model_display_name: str,
     project: str,
     location: str,
     production_alias: str = "production",
 ) -> Champion | None:
-    """Return the joblib-loaded bundle for the @production version, or None.
+    """Return the @production version's loaded TrainedModel + registry metadata.
 
     Returns None on the very first run when no production alias exists yet,
     so the caller can treat "no champion" as a valid state. All "should have
@@ -88,12 +88,12 @@ def load_champion_bundle(
                 local_path = Path(tmp) / Path(blob.name).name
                 blob.download_to_filename(str(local_path))
                 logger.info(
-                    "Loaded champion bundle from %s (version %s).",
+                    "Loaded champion from %s (version %s).",
                     uri,
                     production.version_id,
                 )
                 return Champion(
-                    bundle=Bundle.model_validate(joblib.load(local_path)),
+                    trained_model=TrainedModel.model_validate(joblib.load(local_path)),
                     version_id=production.version_id,
                     resource_name=production.resource_name,
                 )

@@ -102,18 +102,18 @@ def evaluate_op(
     import joblib
 
     from pipeline.components.evaluate import evaluate
-    from will_it_rain_shared.champion import load_champion_bundle
-    from will_it_rain_shared.predict import Bundle
+    from will_it_rain_shared.champion import load_champion
+    from will_it_rain_shared.predict import TrainedModel
 
     prepared_data = joblib.load(prepared.path)
-    challenger = Bundle.model_validate(joblib.load(challenger_bundle.path))
+    challenger = TrainedModel.model_validate(joblib.load(challenger_bundle.path))
 
-    champion = load_champion_bundle(
+    champion = load_champion(
         model_display_name=model_display_name,
         project=project,
         location=location,
     )
-    result = evaluate(prepared_data, challenger, champion.bundle if champion else None)
+    result = evaluate(prepared_data, challenger, champion.trained_model if champion else None)
     joblib.dump(result, evaluation.path)
 
     metrics.log_metric("challenger_f1", result.challenger.f1)

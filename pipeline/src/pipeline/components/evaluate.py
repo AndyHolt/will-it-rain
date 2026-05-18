@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.metrics import f1_score, precision_score, recall_score
 
 from pipeline.components.prepare import PreparedData
-from will_it_rain_shared.predict import Bundle
+from will_it_rain_shared.predict import TrainedModel
 
 PERSISTENCE_WINDOW_HOURS = 4
 PRECIP_BASELINE_COLUMN = "ukmo_uk_deterministic_2km__precipitation"
@@ -107,28 +107,28 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> EvalMetrics:
     )
 
 
-def _score_bundle(test_df: pd.DataFrame, bundle: Bundle) -> EvalMetrics:
-    """Score a model bundle on the test frame.
+def _score_model(test_df: pd.DataFrame, trained_model: TrainedModel) -> EvalMetrics:
+    """Score a trained model on the test frame.
 
-    Raises ``_BundleFeatureMismatch`` when the bundle's expected features
+    Raises ``_BundleFeatureMismatch`` when the model's expected features
     don't match the test set. The caller is responsible for translating that
     into a role-specific public exception.
     """
-    expected = list(bundle.feature_cols)
+    expected = list(trained_model.feature_cols)
     missing = [c for c in expected if c not in test_df.columns]
     extra = [c for c in test_df.columns if c not in expected and c != "will_rain"]
     # Raise on `extra` too, not just `missing`: extra columns wouldn't break
     # scoring (they'd just be ignored), but they signal that the test set has
-    # features the bundle was never trained on — usually because feature
-    # engineering added new columns since the bundle was registered. Surface
+    # features the model was never trained on — usually because feature
+    # engineering added new columns since the model was registered. Surface
     # the drift rather than silently scoring on a stale feature set.
     if missing or extra:
         raise _BundleFeatureMismatch(missing=missing, extra=extra)
     X = test_df[expected]
     y_true = test_df["will_rain"].astype(int).to_numpy()
-    raw = bundle.model.predict_proba(X)[:, 1]
-    calibrated = bundle.calibrator.transform(raw)
-    y_pred = calibrated >= bundle.threshold
+    raw = trained_model.model.predict_proba(X)[:, 1]
+    calibrated = trained_model.calibrator.transform(raw)
+    y_pred = calibrated >= trained_model.threshold
     return _metrics(y_true, y_pred)
 
 
@@ -155,12 +155,12 @@ def _evaluate_precip_threshold(test_df: pd.DataFrame) -> EvalMetrics:
 
 def evaluate(
     prepared: PreparedData,
-    challenger: Bundle,
-    champion: Bundle | None = None,
+    challenger: TrainedModel,
+    champion: TrainedModel | None = None,
 ) -> EvaluationResult:
     """Score challenger, baselines, and (if provided) champion on the same test set.
 
-    ``champion`` is the validated bundle from the current ``production``
+    ``champion`` is the validated model from the current ``production``
     Model Registry entry, or ``None`` on the very first run when no production
     alias exists. The champion is scored on the same test rows as the challenger
     for a fair head-to-head comparison.
@@ -168,7 +168,7 @@ def evaluate(
     test = prepared.test
 
     try:
-        challenger_metrics = _score_bundle(test, challenger)
+        challenger_metrics = _score_model(test, challenger)
     except _BundleFeatureMismatch as exc:
         raise ChallengerFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
     persistence = _evaluate_persistence(test)
@@ -179,7 +179,7 @@ def evaluate(
     champion_metrics: EvalMetrics | None = None
     if champion is not None:
         try:
-            champion_metrics = _score_bundle(test, champion)
+            champion_metrics = _score_model(test, champion)
         except _BundleFeatureMismatch as exc:
             raise ChampionFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
 

@@ -9,7 +9,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import f1_score
 
 from pipeline.components.prepare import PreparedData
-from will_it_rain_shared.predict import Bundle
+from will_it_rain_shared.predict import TrainedModel
 
 RANDOM_SEED = 42
 
@@ -23,7 +23,7 @@ def train(
     num_leaves: int = 31,
     early_stopping_rounds: int = 50,
     threshold_grid_points: int = 91,
-) -> Bundle:
+) -> TrainedModel:
     """Fit the classifier, calibrate on val, and pick an F1-max threshold.
 
     Calibration corrects the magnitude drift caused by the train regime being
@@ -60,7 +60,7 @@ def train(
     val_f1s = [f1_score(y_val, val_probs >= t) for t in candidate_thresholds]
     best_threshold = float(candidate_thresholds[int(np.argmax(val_f1s))])
 
-    return Bundle(
+    return TrainedModel(
         model=model,
         calibrator=calibrator,
         threshold=best_threshold,
@@ -70,6 +70,6 @@ def train(
     )
 
 
-def save_bundle(bundle: Bundle, path: str | Path) -> None:
-    """Serialise a Bundle to a joblib file at ``path``."""
-    joblib.dump(bundle.model_dump(), path)
+def save_bundle(trained_model: TrainedModel, path: str | Path) -> None:
+    """Serialise a TrainedModel to a joblib file at ``path``."""
+    joblib.dump(trained_model.model_dump(), path)

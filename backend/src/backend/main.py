@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from backend.forecast_fetch import fetch_live_forecast, pick_anchor
-from will_it_rain_shared.champion import Champion, load_champion_bundle
-from will_it_rain_shared.predict import PREDICTION_WINDOW_HOURS, predict_from_bundle
+from will_it_rain_shared.champion import load_champion
+from will_it_rain_shared.predict import PREDICTION_WINDOW_HOURS, TrainedModel, predict_from_model
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,9 @@ class HealthResponse(BaseModel):
     model_resource: str | None
     loaded_at_utc: datetime | None
 
-    # Same rationale as Bundle in shared/predict.py: pydantic reserves the
-    # `model_*` prefix by default, which would warn on the two fields above.
+    # Same rationale as TrainedModel in shared/predict.py: pydantic reserves
+    # the `model_*` prefix by default, which would warn on the two fields
+    # above.
     model_config = {"protected_namespaces": ()}
 
 
@@ -53,25 +54,33 @@ class PredictResponse(BaseModel):
 
 
 @dataclass(frozen=True)
-class LoadedChampion:
-    """The currently-serving champion bundle and when this process loaded it."""
+class CurrentModel:
+    """The model currently being served and when this process loaded it.
 
-    champion: Champion
+    Flattens shared.champion.Champion (which carries pipeline-side
+    champion-vs-challenger semantics) into the serving-side view: the
+    trained model itself plus the registry metadata the /health endpoint
+    surfaces.
+    """
+
+    trained_model: TrainedModel
+    version_id: str
+    resource_name: str
     loaded_at: datetime
 
 
 # Module-scope state, written exactly once by the lifespan and read via the
 # Depends providers below. Tests should override the providers via
 # `app.dependency_overrides[...]` rather than reassigning these.
-_loaded: LoadedChampion | None = None
+_current: CurrentModel | None = None
 _settings: Settings | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _loaded, _settings
+    global _current, _settings
     _settings = Settings()
-    champion = load_champion_bundle(
+    champion = load_champion(
         model_display_name=_settings.MODEL_DISPLAY_NAME,
         project=_settings.PROJECT,
         location=_settings.LOCATION,
@@ -79,8 +88,13 @@ async def lifespan(app: FastAPI):
     if champion is None:
         logger.warning("No @production model found at startup — /api/predict will 503.")
     else:
-        _loaded = LoadedChampion(champion=champion, loaded_at=datetime.now(tz=timezone.utc))
-        logger.info("Loaded model version %s at %s.", champion.version_id, _loaded.loaded_at)
+        _current = CurrentModel(
+            trained_model=champion.trained_model,
+            version_id=champion.version_id,
+            resource_name=champion.resource_name,
+            loaded_at=datetime.now(tz=timezone.utc),
+        )
+        logger.info("Loaded model version %s at %s.", _current.version_id, _current.loaded_at)
     yield
 
 
@@ -91,14 +105,14 @@ def get_settings() -> Settings:
     return _settings
 
 
-def get_champion() -> Champion:
-    if _loaded is None:
+def get_current_model() -> CurrentModel:
+    if _current is None:
         raise HTTPException(status_code=503, detail="Model not loaded.")
-    return _loaded.champion
+    return _current
 
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
-ChampionDep = Annotated[Champion, Depends(get_champion)]
+CurrentModelDep = Annotated[CurrentModel, Depends(get_current_model)]
 
 
 app = FastAPI(title="will-it-rain", lifespan=lifespan)
@@ -107,21 +121,21 @@ app = FastAPI(title="will-it-rain", lifespan=lifespan)
 @app.get("/api/health")
 def health() -> HealthResponse:
     # Health reads module state directly rather than via Depends: it must
-    # report the "no champion loaded" state without 503'ing, which is what
-    # get_champion is for.
+    # report the "no model loaded" state without 503'ing, which is what
+    # get_current_model is for.
     return HealthResponse(
         status="ok",
-        model_version=_loaded.champion.version_id if _loaded else None,
-        model_resource=_loaded.champion.resource_name if _loaded else None,
-        loaded_at_utc=_loaded.loaded_at if _loaded else None,
+        model_version=_current.version_id if _current else None,
+        model_resource=_current.resource_name if _current else None,
+        loaded_at_utc=_current.loaded_at if _current else None,
     )
 
 
 @app.get("/api/predict")
-def predict(champion: ChampionDep, settings: SettingsDep) -> PredictResponse:
+def predict(current: CurrentModelDep, settings: SettingsDep) -> PredictResponse:
     forecast = fetch_live_forecast(settings.LATITUDE, settings.LONGITUDE)
     anchor = pick_anchor(forecast)
-    prediction = predict_from_bundle(champion.bundle, forecast, anchor)
+    prediction = predict_from_model(current.trained_model, forecast, anchor)
 
     anchor_dt = prediction.anchor_utc.to_pydatetime()
     return PredictResponse(
@@ -131,5 +145,5 @@ def predict(champion: ChampionDep, settings: SettingsDep) -> PredictResponse:
         calibrated_prob=prediction.calibrated_prob,
         threshold=prediction.threshold,
         will_rain=prediction.will_rain,
-        model_version=champion.version_id,
+        model_version=current.version_id,
     )

@@ -1,6 +1,6 @@
-"""Pure inference function: bundle + forecast frame → prediction.
+"""Pure inference function: trained model + forecast frame → prediction.
 
-Lives in `shared` so the bundle key contract has exactly one consumer-side
+Lives in `shared` so the train/serve contract has exactly one consumer-side
 definition. Drift between this function and `train.save_bundle` would
 silently break predictions; that's the same hazard `features.py` and
 `champion.py` are kept here to avoid.
@@ -22,13 +22,16 @@ from will_it_rain_shared.features import build_features
 PREDICTION_WINDOW_HOURS: int = 4
 
 
-class Bundle(BaseModel):
-    """Train/serve contract for a champion bundle.
+class TrainedModel(BaseModel):
+    """Train/serve contract: a fitted classifier with everything needed to use it.
 
-    Validated at the load boundary so a malformed bundle fails with a clear
-    schema error rather than a downstream KeyError. `arbitrary_types_allowed`
-    is required for the pickled estimator fields; pydantic still isinstance-
-    checks them on validate.
+    The bundle of fields (classifier + calibrator + threshold + feature
+    metadata) is what `save_bundle` writes to disk and `model_validate`
+    reconstructs at load time. Validating here at the load boundary means
+    a malformed artefact fails with a clear schema error rather than a
+    downstream KeyError. `arbitrary_types_allowed` is required for the
+    pickled estimator fields; pydantic still isinstance-checks them on
+    validate.
     """
 
     # `protected_namespaces=()` lifts pydantic's default ban on the `model_*`
@@ -52,33 +55,33 @@ class Prediction:
     will_rain: bool
 
 
-def predict_from_bundle(
-    bundle: Bundle,
+def predict_from_model(
+    model: TrainedModel,
     forecast: pd.DataFrame,
     anchor_utc: pd.Timestamp,
 ) -> Prediction:
-    """Predict will_rain at ``anchor_utc`` using a champion bundle.
+    """Predict will_rain at ``anchor_utc`` using a trained model.
 
     ``forecast`` must contain at least ``anchor_utc`` and the preceding
     ``max(lag_hours)`` hourly rows so lagged features are populated. The
-    sparse columns the bundle was trained without are dropped first.
+    sparse columns the model was trained without are dropped first.
     """
-    trimmed = forecast.drop(columns=[c for c in bundle.sparse_columns if c in forecast.columns])
-    features = build_features(trimmed, bundle.lag_hours)
+    trimmed = forecast.drop(columns=[c for c in model.sparse_columns if c in forecast.columns])
+    features = build_features(trimmed, model.lag_hours)
 
     if anchor_utc not in features.index:
         raise KeyError(
             f"anchor_utc {anchor_utc} not present in forecast index "
             f"(range: {features.index.min()} → {features.index.max()})."
         )
-    row = features.loc[[anchor_utc], bundle.feature_cols]
+    row = features.loc[[anchor_utc], model.feature_cols]
 
-    raw = float(bundle.model.predict_proba(row)[:, 1][0])
-    calibrated = float(bundle.calibrator.transform([raw])[0])
+    raw = float(model.model.predict_proba(row)[:, 1][0])
+    calibrated = float(model.calibrator.transform([raw])[0])
     return Prediction(
         anchor_utc=anchor_utc,
         raw_prob=raw,
         calibrated_prob=calibrated,
-        threshold=bundle.threshold,
-        will_rain=calibrated >= bundle.threshold,
+        threshold=model.threshold,
+        will_rain=calibrated >= model.threshold,
     )
