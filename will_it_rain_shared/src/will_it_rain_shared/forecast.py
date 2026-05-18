@@ -7,7 +7,6 @@ FORECAST_VARIABLES = [
     "temperature_2m",
     "relative_humidity_2m",
     "apparent_temperature",
-    "precipitation_probability",
     "precipitation",
     "rain",
     "showers",
@@ -17,11 +16,8 @@ FORECAST_VARIABLES = [
 ]
 
 FORECAST_MODELS = [
-    "best_match",
+    "ukmo_uk_deterministic_2km",
     "ecmwf_ifs",
-    # best_match for specified location is identical to ukmo_uk... except that it also includes
-    # preciptation probability  column
-    # "ukmo_uk_deterministic_2km",
 ]
 
 

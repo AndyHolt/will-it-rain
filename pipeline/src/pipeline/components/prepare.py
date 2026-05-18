@@ -7,11 +7,7 @@ import pandas as pd
 
 from will_it_rain_shared.features import DEFAULT_LAG_HOURS, build_features
 
-DEFAULT_SPARSE_COLUMNS: tuple[str, ...] = (
-    "best_match__precipitation_probability",
-    "ecmwf_ifs__precipitation_probability",
-    "ecmwf_ifs__showers",
-)
+DEFAULT_SPARSE_COLUMNS: tuple[str, ...] = ("ecmwf_ifs__showers",)
 
 
 @dataclass(frozen=True)
