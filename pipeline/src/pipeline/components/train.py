@@ -1,7 +1,5 @@
 """Train a LightGBM classifier with isotonic calibration."""
 
-from collections.abc import Sequence
-from dataclasses import dataclass, fields
 from pathlib import Path
 
 import joblib
@@ -11,18 +9,9 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import f1_score
 
 from pipeline.components.prepare import PreparedData
+from will_it_rain_shared.predict import TrainedModel
 
 RANDOM_SEED = 42
-
-
-@dataclass(frozen=True)
-class TrainedModel:
-    model: lgb.LGBMClassifier
-    calibrator: IsotonicRegression
-    threshold: float
-    feature_cols: list[str]
-    lag_hours: Sequence[int]
-    sparse_columns: Sequence[str]
 
 
 def train(
@@ -75,19 +64,12 @@ def train(
         model=model,
         calibrator=calibrator,
         threshold=best_threshold,
-        feature_cols=prepared.feature_cols,
-        lag_hours=prepared.lag_hours,
-        sparse_columns=prepared.sparse_columns,
+        feature_cols=list(prepared.feature_cols),
+        lag_hours=list(prepared.lag_hours),
+        sparse_columns=list(prepared.sparse_columns),
     )
 
 
-def save_bundle(trained: TrainedModel, path: str | Path) -> None:
-    """Serialise a TrainedModel to a joblib file at ``path``.
-
-    Bundle keys mirror the dataclass field names; ``dataclasses.fields`` is used
-    rather than ``asdict`` so the contained model/calibrator are stored by
-    reference rather than deepcopied (which would be slow and can corrupt
-    estimator state).
-    """
-    bundle = {f.name: getattr(trained, f.name) for f in fields(trained)}
-    joblib.dump(bundle, path)
+def save_bundle(trained_model: TrainedModel, path: str | Path) -> None:
+    """Serialise a TrainedModel to a joblib file at ``path``."""
+    joblib.dump(trained_model.model_dump(), path)
