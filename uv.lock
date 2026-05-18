@@ -1415,12 +1415,20 @@ name = "will-it-rain-shared"
 version = "0.1.0"
 source = { editable = "will_it_rain_shared" }
 dependencies = [
+    { name = "google-api-core" },
+    { name = "google-cloud-aiplatform" },
+    { name = "google-cloud-storage" },
+    { name = "joblib" },
     { name = "openmeteo-sdk" },
     { name = "pandas" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "google-api-core", specifier = ">=2.21.0" },
+    { name = "google-cloud-aiplatform", specifier = ">=1.60.0" },
+    { name = "google-cloud-storage", specifier = ">=2.18.0" },
+    { name = "joblib", specifier = ">=1.5.0" },
     { name = "openmeteo-sdk", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=3.0.0" },
 ]

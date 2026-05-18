@@ -101,9 +101,9 @@ def evaluate_op(
     """
     import joblib
 
-    from pipeline.components.champion import load_champion_bundle
     from pipeline.components.evaluate import evaluate
     from pipeline.components.train import TrainedModel
+    from will_it_rain_shared.champion import load_champion_bundle
 
     prepared_data = joblib.load(prepared.path)
     challenger = joblib.load(challenger_bundle.path)
@@ -116,12 +116,12 @@ def evaluate_op(
         sparse_columns=challenger["sparse_columns"],
     )
 
-    champion_bundle = load_champion_bundle(
+    champion = load_champion_bundle(
         model_display_name=model_display_name,
         project=project,
         location=location,
     )
-    result = evaluate(prepared_data, trained, champion_bundle)
+    result = evaluate(prepared_data, trained, champion.bundle if champion else None)
     joblib.dump(result, evaluation.path)
 
     metrics.log_metric("challenger_f1", result.challenger.f1)
