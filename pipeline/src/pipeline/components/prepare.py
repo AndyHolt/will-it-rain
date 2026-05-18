@@ -53,8 +53,8 @@ def prepare(
     observations: pd.DataFrame,
     sparse_columns: Sequence[str] = DEFAULT_SPARSE_COLUMNS,
     lag_hours: Sequence[int] = DEFAULT_LAG_HOURS,
-    train_frac: float = 0.70,
-    val_frac: float = 0.15,
+    train_frac: float = 0.60,
+    val_frac: float = 0.20,
     window_hours: int = 4,
     rain_threshold_mm: float = 0.1,
 ) -> PreparedData:

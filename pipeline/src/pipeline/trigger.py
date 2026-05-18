@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     ARTEFACTS_BUCKET: str = "will-it-rain-496215-model-artefacts"
     PIPELINE_SA: str = "pipeline@will-it-rain-496215.iam.gserviceaccount.com"
     PIPELINE_TEMPLATE: str = "build/pipeline.yaml"
-    TRAINING_WINDOW_START_DATE: str = "2023-05-12"
+    TRAINING_WINDOW_START_DATE: str = "2022-03-01"
     MODEL_DISPLAY_NAME: str = "will-it-rain"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
