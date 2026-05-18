@@ -15,6 +15,62 @@ PRECIP_BASELINE_COLUMN = "ukmo_uk_deterministic_2km__precipitation"
 PRECIP_BASELINE_THRESHOLD_MM = 0.1
 
 
+class _BundleFeatureMismatch(RuntimeError):
+    """Internal: signal from ``_score_bundle`` that its bundle's feature_cols
+    don't match the test set. Translated at the ``evaluate`` boundary into a
+    role-specific public subclass of ``FeatureSchemaMismatchError``. Not part
+    of the public API — callers should never catch this directly.
+    """
+
+    def __init__(self, missing: list[str], extra: list[str]) -> None:
+        self.missing = missing
+        self.extra = extra
+        super().__init__(f"missing={missing}, extra={extra}")
+
+
+class FeatureSchemaMismatchError(RuntimeError):
+    """Abstract base for feature-schema mismatch errors raised by ``evaluate``.
+
+    Never raised directly — always one of the concrete subclasses below.
+    Catch this class to handle any feature mismatch regardless of role; catch
+    a subclass to handle one role specifically. Subclasses set ``description``
+    and ``remediation`` to identify the role and the fix.
+    """
+
+    description = ""
+    remediation = ""
+
+    def __init__(self, missing: list[str], extra: list[str]) -> None:
+        self.missing = missing
+        self.extra = extra
+        super().__init__(
+            " ".join(
+                [
+                    self.description,
+                    f"Missing (expected, not in test set): {missing}.",
+                    f"Extra (in test set, not expected): {extra}.",
+                    self.remediation,
+                ]
+            ).strip()
+        )
+
+
+class ChallengerFeatureMismatchError(FeatureSchemaMismatchError):
+    description = "Challenger bundle's features don't match the test set it was trained against."
+    remediation = (
+        "This indicates a bug in the train/prepare components, not feature drift between runs."
+    )
+
+
+class ChampionFeatureMismatchError(FeatureSchemaMismatchError):
+    description = "Champion bundle's features don't match the current test set."
+    remediation = (
+        "Feature engineering has changed since the champion was registered. "
+        "Re-train and re-promote, or clear the @production alias to drop "
+        "the incumbent, before running again."
+    )
+
+
 @dataclass(frozen=True)
 class EvalMetrics:
     f1: float
@@ -53,12 +109,23 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> EvalMetrics:
 
 
 def _score_bundle(test_df: pd.DataFrame, bundle: dict[str, Any]) -> EvalMetrics:
-    """Score a model bundle (challenger or champion) on the test frame."""
-    feature_cols: list[str] = list(bundle["feature_cols"])
-    missing = [c for c in feature_cols if c not in test_df.columns]
-    if missing:
-        raise RuntimeError(f"Bundle expects feature columns not present in test set: {missing}")
-    X = test_df[feature_cols]
+    """Score a model bundle on the test frame.
+
+    Raises ``_BundleFeatureMismatch`` when the bundle's expected features
+    don't match the test set. The caller is responsible for translating that
+    into a role-specific public exception.
+    """
+    expected: list[str] = list(bundle["feature_cols"])
+    missing = [c for c in expected if c not in test_df.columns]
+    extra = [c for c in test_df.columns if c not in expected and c != "will_rain"]
+    # Raise on `extra` too, not just `missing`: extra columns wouldn't break
+    # scoring (they'd just be ignored), but they signal that the test set has
+    # features the bundle was never trained on — usually because feature
+    # engineering added new columns since the bundle was registered. Surface
+    # the drift rather than silently scoring on a stale feature set.
+    if missing or extra:
+        raise _BundleFeatureMismatch(missing=missing, extra=extra)
+    X = test_df[expected]
     y_true = test_df["will_rain"].astype(int).to_numpy()
     raw = bundle["model"].predict_proba(X)[:, 1]
     calibrated = bundle["calibrator"].transform(raw)
@@ -107,10 +174,21 @@ def evaluate(
         "threshold": trained.threshold,
         "feature_cols": list(trained.feature_cols),
     }
-    challenger = _score_bundle(test, challenger_bundle)
+    try:
+        challenger = _score_bundle(test, challenger_bundle)
+    except _BundleFeatureMismatch as exc:
+        raise ChallengerFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
     persistence = _evaluate_persistence(test)
     precipitation_threshold = _evaluate_precip_threshold(test)
-    champion = _score_bundle(test, champion_bundle) if champion_bundle is not None else None
+    # Fail loudly on champion schema drift rather than silently skip: a
+    # regression caused by new features would otherwise promote with no
+    # comparison against the incumbent.
+    champion: EvalMetrics | None = None
+    if champion_bundle is not None:
+        try:
+            champion = _score_bundle(test, champion_bundle)
+        except _BundleFeatureMismatch as exc:
+            raise ChampionFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
 
     return EvaluationResult(
         challenger=challenger,
