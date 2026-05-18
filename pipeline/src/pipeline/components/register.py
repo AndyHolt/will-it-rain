@@ -61,9 +61,13 @@ def register(
     """
     aiplatform.init(project=project, location=location)
 
+    # Vertex's sklearn prediction container requires the model directory to
+    # contain exactly one of `model.pkl` or `model.joblib`. The KFP Output[Model]
+    # artifact has no extension (`bundle`), so we rename on upload — the bundle
+    # is a joblib dump, hence `.joblib`.
     bundle_path = Path(bundle_path)
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    blob_path = f"models/{timestamp}/{bundle_path.name}"
+    blob_path = f"models/{timestamp}/model.joblib"
     artifact_uri = f"gs://{artefacts_bucket}/models/{timestamp}"
 
     storage.Client(project=project).bucket(artefacts_bucket).blob(blob_path).upload_from_filename(
