@@ -11,7 +11,7 @@ from pipeline.components.prepare import PreparedData
 from pipeline.components.train import TrainedModel
 
 PERSISTENCE_WINDOW_HOURS = 4
-PRECIP_BASELINE_COLUMN = "best_match__precipitation"
+PRECIP_BASELINE_COLUMN = "ukmo_uk_deterministic_2km__precipitation"
 PRECIP_BASELINE_THRESHOLD_MM = 0.1
 
 
@@ -81,7 +81,7 @@ def _evaluate_persistence(test_df: pd.DataFrame) -> EvalMetrics:
 
 
 def _evaluate_precip_threshold(test_df: pd.DataFrame) -> EvalMetrics:
-    """Naive forecast baseline: rain iff ``best_match__precipitation`` ≥ 0.1mm at T."""
+    """Naive forecast baseline: rain iff ``ukmo_uk_deterministic_2km__precipitation`` ≥ 0.1mm at T."""
     y_true = test_df["will_rain"].astype(bool).to_numpy()
     y_pred = (test_df[PRECIP_BASELINE_COLUMN] >= PRECIP_BASELINE_THRESHOLD_MM).to_numpy()
     return _metrics(y_true, y_pred)
