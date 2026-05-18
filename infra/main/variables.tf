@@ -52,3 +52,9 @@ variable "model_display_name" {
   description = "Display name for the model in the Vertex AI Model Registry."
   default     = "will-it-rain"
 }
+
+variable "backend_image" {
+  type        = string
+  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit."
+  default     = "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/backend:latest"
+}
