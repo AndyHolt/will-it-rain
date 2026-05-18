@@ -1,14 +1,13 @@
 """Evaluate the challenger against baselines and (when available) the champion."""
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score, precision_score, recall_score
 
 from pipeline.components.prepare import PreparedData
-from pipeline.components.train import TrainedModel
+from will_it_rain_shared.predict import Bundle
 
 PERSISTENCE_WINDOW_HOURS = 4
 PRECIP_BASELINE_COLUMN = "ukmo_uk_deterministic_2km__precipitation"
@@ -108,14 +107,14 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> EvalMetrics:
     )
 
 
-def _score_bundle(test_df: pd.DataFrame, bundle: dict[str, Any]) -> EvalMetrics:
+def _score_bundle(test_df: pd.DataFrame, bundle: Bundle) -> EvalMetrics:
     """Score a model bundle on the test frame.
 
     Raises ``_BundleFeatureMismatch`` when the bundle's expected features
     don't match the test set. The caller is responsible for translating that
     into a role-specific public exception.
     """
-    expected: list[str] = list(bundle["feature_cols"])
+    expected = list(bundle.feature_cols)
     missing = [c for c in expected if c not in test_df.columns]
     extra = [c for c in test_df.columns if c not in expected and c != "will_rain"]
     # Raise on `extra` too, not just `missing`: extra columns wouldn't break
@@ -127,9 +126,9 @@ def _score_bundle(test_df: pd.DataFrame, bundle: dict[str, Any]) -> EvalMetrics:
         raise _BundleFeatureMismatch(missing=missing, extra=extra)
     X = test_df[expected]
     y_true = test_df["will_rain"].astype(int).to_numpy()
-    raw = bundle["model"].predict_proba(X)[:, 1]
-    calibrated = bundle["calibrator"].transform(raw)
-    y_pred = calibrated >= bundle["threshold"]
+    raw = bundle.model.predict_proba(X)[:, 1]
+    calibrated = bundle.calibrator.transform(raw)
+    y_pred = calibrated >= bundle.threshold
     return _metrics(y_true, y_pred)
 
 
@@ -156,26 +155,20 @@ def _evaluate_precip_threshold(test_df: pd.DataFrame) -> EvalMetrics:
 
 def evaluate(
     prepared: PreparedData,
-    trained: TrainedModel,
-    champion_bundle: dict[str, Any] | None = None,
+    challenger: Bundle,
+    champion: Bundle | None = None,
 ) -> EvaluationResult:
     """Score challenger, baselines, and (if provided) champion on the same test set.
 
-    ``champion_bundle`` is the joblib-loaded dict from the current ``production``
+    ``champion`` is the validated bundle from the current ``production``
     Model Registry entry, or ``None`` on the very first run when no production
     alias exists. The champion is scored on the same test rows as the challenger
     for a fair head-to-head comparison.
     """
     test = prepared.test
 
-    challenger_bundle: dict[str, Any] = {
-        "model": trained.model,
-        "calibrator": trained.calibrator,
-        "threshold": trained.threshold,
-        "feature_cols": list(trained.feature_cols),
-    }
     try:
-        challenger = _score_bundle(test, challenger_bundle)
+        challenger_metrics = _score_bundle(test, challenger)
     except _BundleFeatureMismatch as exc:
         raise ChallengerFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
     persistence = _evaluate_persistence(test)
@@ -183,20 +176,20 @@ def evaluate(
     # Fail loudly on champion schema drift rather than silently skip: a
     # regression caused by new features would otherwise promote with no
     # comparison against the incumbent.
-    champion: EvalMetrics | None = None
-    if champion_bundle is not None:
+    champion_metrics: EvalMetrics | None = None
+    if champion is not None:
         try:
-            champion = _score_bundle(test, champion_bundle)
+            champion_metrics = _score_bundle(test, champion)
         except _BundleFeatureMismatch as exc:
             raise ChampionFeatureMismatchError(missing=exc.missing, extra=exc.extra) from exc
 
     return EvaluationResult(
-        challenger=challenger,
+        challenger=challenger_metrics,
         baselines=BaselineMetrics(
             persistence=persistence,
             precipitation_threshold=precipitation_threshold,
         ),
-        champion=champion,
+        champion=champion_metrics,
         test_start=test.index[0],
         test_end=test.index[-1],
         n_test_rows=len(test),

@@ -10,18 +10,19 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
 
 import joblib
 from google.api_core.exceptions import NotFound
 from google.cloud import aiplatform, storage
+
+from will_it_rain_shared.predict import Bundle
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class Champion:
-    bundle: dict[str, Any]
+    bundle: Bundle
     version_id: str
     resource_name: str
 
@@ -92,7 +93,7 @@ def load_champion_bundle(
                     production.version_id,
                 )
                 return Champion(
-                    bundle=joblib.load(local_path),
+                    bundle=Bundle.model_validate(joblib.load(local_path)),
                     version_id=production.version_id,
                     resource_name=production.resource_name,
                 )

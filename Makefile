@@ -7,14 +7,18 @@
 #   - Docker (with buildx) is running locally.
 #   - uv has the workspace synced.
 
-PROJECT_ID       := will-it-rain-496215
-REGION           := europe-west2
-ARTEFACTS_BUCKET := $(PROJECT_ID)-model-artefacts
-IMAGE_REPO       := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
-IMAGE_NAME       := pipeline
-IMAGE_TAG        ?= latest
-PIPELINE_SPEC    := build/pipeline.yaml
-IMAGE_SENTINEL   := build/.image-pushed
+PROJECT_ID            := will-it-rain-496215
+REGION                := europe-west2
+ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
+IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
+IMAGE_NAME            := pipeline
+IMAGE_TAG             ?= latest
+BACKEND_IMAGE_NAME    := backend
+BACKEND_IMAGE_TAG     ?= latest
+BACKEND_SERVICE       := backend
+PIPELINE_SPEC         := build/pipeline.yaml
+IMAGE_SENTINEL        := build/.image-pushed
+BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
 
 # Files baked into the pipeline image. If any of these change, the image
 # must be rebuilt before the next Vertex run, otherwise `:latest` will
@@ -27,12 +31,20 @@ IMAGE_SOURCES    := pipeline/Dockerfile \
                     $(shell find pipeline/src -name '*.py') \
                     $(shell find will_it_rain_shared/src -name '*.py')
 
+BACKEND_IMAGE_SOURCES := backend/Dockerfile \
+                         pyproject.toml uv.lock \
+                         backend/pyproject.toml \
+                         will_it_rain_shared/pyproject.toml \
+                         $(shell find backend/src -name '*.py') \
+                         $(shell find will_it_rain_shared/src -name '*.py')
+
 .DEFAULT_GOAL := help
 
 .PHONY: help \
         lint format-check typecheck test check \
         lint-fix format fix prek \
-        image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean
+        image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
+        backend-image backend-deploy
 
 # ---------------------------------------------------------------------------
 # Dev tooling
@@ -118,6 +130,30 @@ deploy-pipeline: image upload-pipeline
 # would silently fail to take effect.
 trigger-run: $(PIPELINE_SPEC) $(IMAGE_SENTINEL)
 	uv run --package pipeline python -m pipeline.trigger
+
+# ---------------------------------------------------------------------------
+# Backend build / deploy
+# ---------------------------------------------------------------------------
+
+# Build and push the backend image. Same cross-compile reasoning as `image`:
+# Cloud Run runs x86_64.
+backend-image: $(BACKEND_IMAGE_SENTINEL)
+
+$(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
+	docker buildx build \
+	    --platform linux/amd64 \
+	    --push \
+	    --tag $(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG) \
+	    --file backend/Dockerfile \
+	    .
+	@mkdir -p $(dir $@) && touch $@
+
+# Roll out a new Cloud Run revision pointing at the freshly-pushed image.
+# Use this after `backend-image` to pick up code or promoted-model changes.
+backend-deploy: $(BACKEND_IMAGE_SENTINEL)
+	gcloud run services update $(BACKEND_SERVICE) \
+	    --region=$(REGION) \
+	    --image=$(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG)
 
 clean:
 	rm -rf build/

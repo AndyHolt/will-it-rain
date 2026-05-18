@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from will_it_rain_shared.features import DEFAULT_LAG_HOURS, build_features
+from will_it_rain_shared.predict import PREDICTION_WINDOW_HOURS
 
 DEFAULT_SPARSE_COLUMNS: tuple[str, ...] = ("ecmwf_ifs__showers",)
 
@@ -22,7 +23,7 @@ class PreparedData:
 
 def build_labels(
     observations: pd.DataFrame,
-    window_hours: int = 4,
+    window_hours: int = PREDICTION_WINDOW_HOURS,
     rain_threshold_mm: float = 0.1,
 ) -> pd.DataFrame:
     """Label hourly anchors as rain/no-rain over a forward window.
@@ -55,7 +56,7 @@ def prepare(
     lag_hours: Sequence[int] = DEFAULT_LAG_HOURS,
     train_frac: float = 0.60,
     val_frac: float = 0.20,
-    window_hours: int = 4,
+    window_hours: int = PREDICTION_WINDOW_HOURS,
     rain_threshold_mm: float = 0.1,
 ) -> PreparedData:
     """Build the training dataset and split chronologically into train/val/test.

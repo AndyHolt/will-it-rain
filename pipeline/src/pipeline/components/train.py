@@ -1,7 +1,5 @@
 """Train a LightGBM classifier with isotonic calibration."""
 
-from collections.abc import Sequence
-from dataclasses import dataclass, fields
 from pathlib import Path
 
 import joblib
@@ -11,18 +9,9 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import f1_score
 
 from pipeline.components.prepare import PreparedData
+from will_it_rain_shared.predict import Bundle
 
 RANDOM_SEED = 42
-
-
-@dataclass(frozen=True)
-class TrainedModel:
-    model: lgb.LGBMClassifier
-    calibrator: IsotonicRegression
-    threshold: float
-    feature_cols: list[str]
-    lag_hours: Sequence[int]
-    sparse_columns: Sequence[str]
 
 
 def train(
@@ -34,7 +23,7 @@ def train(
     num_leaves: int = 31,
     early_stopping_rounds: int = 50,
     threshold_grid_points: int = 91,
-) -> TrainedModel:
+) -> Bundle:
     """Fit the classifier, calibrate on val, and pick an F1-max threshold.
 
     Calibration corrects the magnitude drift caused by the train regime being
@@ -71,23 +60,16 @@ def train(
     val_f1s = [f1_score(y_val, val_probs >= t) for t in candidate_thresholds]
     best_threshold = float(candidate_thresholds[int(np.argmax(val_f1s))])
 
-    return TrainedModel(
+    return Bundle(
         model=model,
         calibrator=calibrator,
         threshold=best_threshold,
-        feature_cols=prepared.feature_cols,
-        lag_hours=prepared.lag_hours,
-        sparse_columns=prepared.sparse_columns,
+        feature_cols=list(prepared.feature_cols),
+        lag_hours=list(prepared.lag_hours),
+        sparse_columns=list(prepared.sparse_columns),
     )
 
 
-def save_bundle(trained: TrainedModel, path: str | Path) -> None:
-    """Serialise a TrainedModel to a joblib file at ``path``.
-
-    Bundle keys mirror the dataclass field names; ``dataclasses.fields`` is used
-    rather than ``asdict`` so the contained model/calibrator are stored by
-    reference rather than deepcopied (which would be slow and can corrupt
-    estimator state).
-    """
-    bundle = {f.name: getattr(trained, f.name) for f in fields(trained)}
-    joblib.dump(bundle, path)
+def save_bundle(bundle: Bundle, path: str | Path) -> None:
+    """Serialise a Bundle to a joblib file at ``path``."""
+    joblib.dump(bundle.model_dump(), path)

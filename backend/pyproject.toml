@@ -5,6 +5,17 @@ description = "FastAPI backend serving will-it-rain predictions"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "fastapi>=0.115.0",
+    "lightgbm>=4.6.0",
+    "niquests>=3.16.0",
+    "numpy>=2.4.0",
+    "openmeteo-requests>=1.7.0",
+    "openmeteo-sdk>=1.26.0",
+    "pandas>=3.0.0",
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.14.0",
+    "scikit-learn>=1.8.0",
+    "uvicorn[standard]>=0.32.0",
     "will-it-rain-shared",
 ]
 
