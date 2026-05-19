@@ -42,8 +42,11 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 .DEFAULT_GOAL := help
 
 .PHONY: help \
-	lint format-check typecheck test check \
-	lint-fix format fix prek \
+	py-lint py-format-check py-typecheck py-test py-check \
+	py-lint-fix py-format py-fix \
+	frontend-lint frontend-format-check frontend-typecheck frontend-check \
+	frontend-lint-fix frontend-format frontend-fix \
+	check fix prek \
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
 	backend-image backend-deploy
@@ -51,34 +54,69 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 # ---------------------------------------------------------------------------
 # Dev tooling
 # ---------------------------------------------------------------------------
+#
+# Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, backend,
+# shared library. Frontend tooling (biome, tsc) covers the TypeScript workspace
+# under frontend/. `check` and `fix` aggregate both.
 
 # Print available targets (anything whose recipe line carries a `## doc`).
 help:
-	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# Read-only checks (no mutations) — what CI runs.
-lint: ## ruff lint, no fixes
+# Python — read-only checks (no mutations) — what CI runs.
+py-lint: ## ruff lint, no fixes
 	uv run ruff check
 
-format-check: ## ruff format --check, no writes
+py-format-check: ## ruff format --check, no writes
 	uv run ruff format --check
 
-typecheck: ## ty static type checks
+py-typecheck: ## ty static type checks
 	uv run ty check
 
-test: ## pytest across the workspace
+py-test: ## pytest across the workspace
 	uv run pytest
 
-check: lint format-check typecheck test ## all read-only checks (CI parity)
+py-check: py-lint py-format-check py-typecheck py-test ## all Python read-only checks
 
-# Auto-fixers — mutate the working tree.
-lint-fix: ## ruff lint with --fix
+# Python — auto-fixers (mutate the working tree).
+py-lint-fix: ## ruff lint with --fix
 	uv run ruff check --fix
 
-format: ## ruff format (writes)
+py-format: ## ruff format (writes)
 	uv run ruff format
 
-fix: lint-fix format ## all auto-fixers
+py-fix: py-lint-fix py-format ## all Python auto-fixers
+
+# Frontend — read-only checks. `biome check` covers both lint and format-check
+# in one pass; the split frontend-lint / frontend-format-check recipes are
+# for targeted use.
+frontend-lint: ## biome lint, no fixes
+	pnpm -C frontend lint
+
+frontend-format-check: ## biome format --check, no writes
+	pnpm -C frontend format
+
+frontend-typecheck: ## tsc -b (project references)
+	pnpm -C frontend typecheck
+
+frontend-check: ## biome check (lint + format) + tsc
+	pnpm -C frontend check
+	pnpm -C frontend typecheck
+
+# Frontend — auto-fixers (mutate the working tree).
+frontend-lint-fix: ## biome lint --write
+	pnpm -C frontend lint:fix
+
+frontend-format: ## biome format --write
+	pnpm -C frontend format:fix
+
+frontend-fix: ## biome check --write (lint + format)
+	pnpm -C frontend check:fix
+
+# Aggregators across both toolchains. Default for "did I break anything?".
+check: py-check frontend-check ## all read-only checks (CI parity, both stacks)
+
+fix: py-fix frontend-fix ## all auto-fixers (both stacks)
 
 # Run the full prek hook set against every file. Matches what pre-commit
 # enforces locally and what the prek hook job runs in CI.
