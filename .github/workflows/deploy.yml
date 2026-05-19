@@ -1,0 +1,214 @@
+name: deploy
+
+# Single deploy workflow on merge to main. Path-filtered: each component
+# (pipeline, backend, frontend, infra) only builds / deploys when its
+# inputs changed. Auth is via the bootstrap WIF provider impersonating
+# the terraform SA — see infra/bootstrap/main.tf for the role set.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # WIF token exchange
+  contents: read
+
+env:
+  PROJECT_ID: will-it-rain-496215
+  REGION: europe-west2
+  WIF_PROVIDER: projects/597101211776/locations/global/workloadIdentityPools/github-actions/providers/github
+  WIF_SERVICE_ACCOUNT: terraform@will-it-rain-496215.iam.gserviceaccount.com
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Determine which components changed in this push. Each downstream job gates
+  # on the corresponding output. Shared library + workspace lockfile changes
+  # bust both the pipeline and backend images (they're in both images).
+  # ---------------------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pipeline: ${{ steps.filter.outputs.pipeline }}
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pipeline:
+              - 'pipeline/**'
+              - 'will_it_rain_shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'Makefile'
+            backend:
+              - 'backend/**'
+              - 'will_it_rain_shared/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'Makefile'
+            frontend:
+              - 'frontend/**'
+            infra:
+              - 'infra/main/**'
+
+  # ---------------------------------------------------------------------------
+  # Build + push container images. Both jobs are independent; either or both
+  # can run, gated by path filters.
+  # ---------------------------------------------------------------------------
+  build-pipeline-image:
+    needs: changes
+    if: needs.changes.outputs.pipeline == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker credential helper for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push pipeline image
+        run: make image
+
+  build-backend-image:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker credential helper for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push backend image
+        run: make backend-image
+
+  # ---------------------------------------------------------------------------
+  # Compile the KFP pipeline spec and upload to GCS. infra/main/scheduler.tf
+  # reads this object at plan time and inlines it into the scheduler job body,
+  # so this MUST run before terraform-apply when pipeline code changes.
+  # ---------------------------------------------------------------------------
+  compile-and-upload-pipeline:
+    needs: changes
+    if: needs.changes.outputs.pipeline == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - name: Install workspace
+        run: uv sync --all-packages
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Compile pipeline spec
+        run: make compile-pipeline
+      - name: Upload pipeline spec to GCS
+        run: make upload-pipeline
+
+  # ---------------------------------------------------------------------------
+  # Apply infra. Needed when either:
+  #   - infra HCL changed (resource shape), or
+  #   - pipeline changed (scheduler.tf reads the freshly-uploaded YAML).
+  # Backend/frontend code changes don't change TF state (backend image is
+  # pinned to :latest in TF, deployed revisions come from `make backend-deploy`).
+  # ---------------------------------------------------------------------------
+  terraform-apply:
+    needs: [changes, compile-and-upload-pipeline, build-pipeline-image, build-backend-image]
+    if: |
+      always() &&
+      (needs.changes.outputs.pipeline == 'true' || needs.changes.outputs.infra == 'true') &&
+      (needs.compile-and-upload-pipeline.result == 'success' || needs.compile-and-upload-pipeline.result == 'skipped') &&
+      (needs.build-pipeline-image.result == 'success' || needs.build-pipeline-image.result == 'skipped') &&
+      (needs.build-backend-image.result == 'success' || needs.build-backend-image.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_weather_latitude: ${{ secrets.WEATHER_LATITUDE }}
+      TF_VAR_weather_longitude: ${{ secrets.WEATHER_LONGITUDE }}
+      TF_VAR_cosmos_uk_site_code: ${{ secrets.COSMOS_UK_SITE_CODE }}
+      TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform init
+        run: terraform -chdir=infra/main init
+      - name: Terraform apply
+        run: terraform -chdir=infra/main apply -auto-approve -input=false
+
+  # ---------------------------------------------------------------------------
+  # Roll forward Cloud Run + Firebase Hosting. Both wait on terraform-apply
+  # (which may be skipped on a code-only change — handled in `if`).
+  # ---------------------------------------------------------------------------
+  backend-deploy:
+    needs: [changes, build-backend-image, terraform-apply]
+    if: |
+      always() &&
+      needs.changes.outputs.backend == 'true' &&
+      needs.build-backend-image.result == 'success' &&
+      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      # Call gcloud directly rather than `make backend-deploy`: the make
+      # recipe depends on the image sentinel, which doesn't exist on this
+      # fresh runner — it would trigger a redundant local image rebuild.
+      # The image was just pushed by build-backend-image.
+      - name: Roll new Cloud Run revision
+        run: |
+          gcloud run services update backend \
+            --region=${{ env.REGION }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/will-it-rain-images/backend:latest
+
+  frontend-deploy:
+    needs: [changes, terraform-apply]
+    if: |
+      always() &&
+      needs.changes.outputs.frontend == 'true' &&
+      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+      - uses: pnpm/action-setup@v6
+        with:
+          version: latest
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - name: Build SPA
+        run: make frontend-build
+      # firebase-tools picks up GOOGLE_APPLICATION_CREDENTIALS set by
+      # google-github-actions/auth. --project pinned for non-interactive use
+      # even though .firebaserc already defaults to it.
+      - name: Deploy to Firebase Hosting
+        working-directory: frontend
+        run: npx -y firebase-tools@latest deploy --only hosting --non-interactive --project ${{ env.PROJECT_ID }}
