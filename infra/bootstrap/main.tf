@@ -68,6 +68,55 @@ resource "google_project_iam_member" "tf_service_usage_consumer" {
   member  = "serviceAccount:${google_service_account.terraform.email}"
 }
 
+# Project-level roles the Terraform SA needs in order to:
+#   (a) manage every resource under infra/main/ via `terraform apply`, and
+#   (b) push images / upload pipeline spec / deploy Cloud Run revisions /
+#       publish Firebase Hosting from the CI deploy workflow that
+#       impersonates this SA via WIF.
+#
+# Granted here in bootstrap rather than in infra/main/ to avoid the
+# chicken-and-egg of needing the role in order to apply the file that
+# grants it. Bootstrap is applied manually as the human user, infrequently.
+locals {
+  tf_sa_project_roles = [
+    "roles/aiplatform.admin",                # Vertex pipelines, Model Registry
+    "roles/artifactregistry.admin",          # AR repo + push images
+    "roles/cloudscheduler.admin",            # weekly training schedule
+    "roles/firebase.admin",                  # Firebase project enrolment + Hosting deploy
+    "roles/iam.serviceAccountAdmin",         # create pipeline/backend/scheduler SAs
+    "roles/iam.serviceAccountUser",          # act-as backend SA when deploying Cloud Run revisions
+    "roles/monitoring.admin",                # pipeline-finished alert policy
+    "roles/resourcemanager.projectIamAdmin", # project IAM bindings for the SAs above
+    "roles/run.admin",                       # Cloud Run service + revisions
+    "roles/serviceusage.serviceUsageAdmin",  # enable APIs in infra/main/apis.tf
+    "roles/storage.admin",                   # artefacts bucket + upload pipeline spec
+  ]
+}
+
+resource "google_project_iam_member" "terraform_sa" {
+  for_each = toset(local.tf_sa_project_roles)
+
+  project = var.project_id
+  role    = each.value
+  member  = "serviceAccount:${google_service_account.terraform.email}"
+}
+
+# Billing-account-level read access for the SA. `google_billing_budget` in
+# infra/main/ needs `billing.budgets.get` to refresh, which lives on the
+# billing account, not the project — so it can't be a project IAM binding.
+# Whoever applies bootstrap needs billing-account admin to grant this.
+data "google_project" "this" {
+  project_id = var.project_id
+
+  depends_on = [google_project_service.bootstrap]
+}
+
+resource "google_billing_account_iam_member" "tf_billing_viewer" {
+  billing_account_id = data.google_project.this.billing_account
+  role               = "roles/billing.viewer"
+  member             = "serviceAccount:${google_service_account.terraform.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Workload Identity Federation for GitHub Actions
 # ---------------------------------------------------------------------------
