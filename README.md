@@ -70,6 +70,10 @@ against the current production champion on the same held-out test set; the
 `production` alias in the Model Registry only moves forward if the
 challenger beats the champion by a margin.
 
+<p align="center">
+  <img src="docs/pipeline-graph.png" alt="Vertex AI pipeline graph: fetch-forecast and fetch-observations feed prepare, then train, then evaluate, then a register-and-promote group containing register and promote." width="280" />
+</p>
+
 ## Frontend
 
 When the site is loaded, it calls `/api/predict` once and renders a plain,
