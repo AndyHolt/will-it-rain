@@ -168,3 +168,24 @@ def promote_op(
     new_version = aiplatform.Model(model_name=registered_model_resource_name)
     evaluation_obj = joblib.load(evaluation.path)
     return promote(new_version, evaluation_obj, project=project, location=location)
+
+
+@dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
+def publish_promotion_op(
+    registered_model_resource_name: str,
+    project: str,
+    location: str,
+    model_display_name: str,
+) -> str:
+    from google.cloud import aiplatform
+
+    from pipeline.components.publish_promotion import publish_promotion
+
+    aiplatform.init(project=project, location=location)
+    model = aiplatform.Model(model_name=registered_model_resource_name)
+    return publish_promotion(
+        project=project,
+        model_display_name=model_display_name,
+        version_id=model.version_id,
+        resource_name=model.versioned_resource_name,
+    )

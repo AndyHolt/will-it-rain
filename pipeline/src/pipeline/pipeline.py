@@ -13,6 +13,7 @@ from pipeline.kfp_components import (
     fetch_observations_op,
     prepare_op,
     promote_op,
+    publish_promotion_op,
     register_op,
     train_op,
 )
@@ -79,9 +80,22 @@ def will_it_rain_pipeline(
             artefacts_bucket=artefacts_bucket,
             model_display_name=model_display_name,
         )
-        promote_op(
+        promote = promote_op(
             registered_model_resource_name=register.output,
             evaluation=evaluate.outputs["evaluation"],
             project=project,
             location=location,
         )
+
+        # Same `== True` dance as the evaluate gate above: promote.output is
+        # a PipelineParameterChannel, not a bool. The publish step only runs
+        # when the alias was actually moved (first run or challenger win) —
+        # downstream, a Cloud Function bumps the backend Cloud Run service so
+        # the next revision picks up the new @production model.
+        with dsl.If(promote.output == True, name="publish-promotion"):  # noqa: E712
+            publish_promotion_op(
+                registered_model_resource_name=register.output,
+                project=project,
+                location=location,
+                model_display_name=model_display_name,
+            )

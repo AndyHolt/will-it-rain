@@ -39,6 +39,14 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 			 $(shell find backend/src -name '*.py') \
 			 $(shell find will_it_rain_shared/src -name '*.py')
 
+# Files baked into the model-refresher zip. Same staged-artifact pattern as
+# the pipeline YAML: CI zips + uploads to a fixed GCS path,
+# infra/main/model_refresh.tf reads the object's generation to trigger a
+# redeploy on change.
+MODEL_REFRESHER_SOURCE_DIR := model_refresher
+MODEL_REFRESHER_ZIP        := build/model_refresher.zip
+MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f)
+
 .DEFAULT_GOAL := help
 
 .PHONY: help \
@@ -50,6 +58,7 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
 	backend-image backend-deploy \
+	model-refresher-source upload-model-refresher-source \
 	frontend-build frontend-deploy
 
 # ---------------------------------------------------------------------------
@@ -220,6 +229,24 @@ backend-deploy: $(BACKEND_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_SERVICE) \
 	    --region=$(REGION) \
 	    --image=$(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG)
+
+# ---------------------------------------------------------------------------
+# Model-refresher build / upload
+# ---------------------------------------------------------------------------
+
+# Zip the model_refresher source. `cd` into the source dir so the archive
+# contains main.py / requirements.txt at the top level — Cloud Functions
+# expects them there, not nested under model_refresher/.
+model-refresher-source: $(MODEL_REFRESHER_ZIP)
+
+$(MODEL_REFRESHER_ZIP): $(MODEL_REFRESHER_SOURCES)
+	@mkdir -p $(dir $@)
+	cd $(MODEL_REFRESHER_SOURCE_DIR) && zip -r ../$(MODEL_REFRESHER_ZIP) . -x '__pycache__/*' '*.pyc'
+
+# Upload the zip to the GCS path the model_refresh.tf data source reads.
+# Same staging pattern as `upload-pipeline`.
+upload-model-refresher-source: $(MODEL_REFRESHER_ZIP)
+	gcloud storage cp $(MODEL_REFRESHER_ZIP) gs://$(ARTEFACTS_BUCKET)/functions/model_refresher.zip
 
 clean:
 	rm -rf build/
