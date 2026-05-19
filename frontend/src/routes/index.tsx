@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { Cloud, CloudRain } from "lucide-react";
 
 import { type PredictResponse, predictQueryOptions } from "@/forecast/fetch";
 
@@ -39,13 +40,17 @@ function IndexComponent() {
 function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshing: boolean }) {
   const verdict = data.will_rain ? "Yes, bring a coat." : "No, you're probably fine.";
   const pct = Math.round(data.calibrated_prob * 100);
+  const Icon = data.will_rain ? CloudRain : Cloud;
 
   return (
     <section className="w-full rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm">
       <p className="text-sm text-muted-foreground">
         Forecast for {formatRange(data.anchor_utc, data.window_end_utc)}
       </p>
-      <p className="mt-3 text-4xl font-semibold">{verdict}</p>
+      <div className="mt-3 flex items-center gap-3">
+        <Icon className="h-10 w-10 shrink-0" aria-hidden="true" strokeWidth={2} />
+        <p className="text-4xl font-semibold">{verdict}</p>
+      </div>
       <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
         <Stat label="Rain probability" value={`${pct}%`} />
         <Stat label="Decision threshold" value={`${Math.round(data.threshold * 100)}%`} />
