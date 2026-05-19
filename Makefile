@@ -49,7 +49,8 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 	check fix prek \
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
-	backend-image backend-deploy
+	backend-image backend-deploy \
+	frontend-build frontend-deploy
 
 # ---------------------------------------------------------------------------
 # Dev tooling
@@ -222,3 +223,19 @@ backend-deploy: $(BACKEND_IMAGE_SENTINEL)
 
 clean:
 	rm -rf build/
+
+# ---------------------------------------------------------------------------
+# Frontend build / deploy
+# ---------------------------------------------------------------------------
+
+# Build the SPA into frontend/dist. Firebase Hosting deploy publishes from
+# that directory (configured in frontend/firebase.json).
+frontend-build:
+	pnpm -C frontend install --frozen-lockfile
+	pnpm -C frontend build
+
+# Publish the built SPA to Firebase Hosting. TF owns the site shape (project
+# enrolment, site, /api/** rewrite to Cloud Run); this just ships content,
+# mirroring the backend-deploy pattern. Requires `firebase login` once.
+frontend-deploy: frontend-build
+	cd frontend && firebase deploy --only hosting

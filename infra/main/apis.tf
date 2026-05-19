@@ -8,6 +8,7 @@ locals {
     "cloudscheduler.googleapis.com",   # weekly pipeline cron
     "artifactregistry.googleapis.com", # container images
     "cloudbuild.googleapis.com",       # image builds (CI/CD)
+    "firebase.googleapis.com",         # Firebase project enrolment
     "firebasehosting.googleapis.com",  # frontend hosting
   ]
 }

@@ -6,6 +6,12 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 6.0"
     }
+    # Firebase resources (project enrolment, Hosting site) are only available
+    # in the beta provider.
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = "~> 6.0"
+    }
   }
 
   # Remote state in the bucket created by infra/bootstrap.
