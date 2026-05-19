@@ -1,6 +1,7 @@
 """FastAPI app: serves predictions from the @production model."""
 
 import logging
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from backend.forecast_fetch import fetch_live_forecast, pick_anchor
 from will_it_rain_shared.champion import load_champion
 from will_it_rain_shared.predict import PREDICTION_WINDOW_HOURS, TrainedModel, predict_from_model
+
+# Uvicorn only configures its own loggers; the root logger is left bare, so
+# app-module INFO logs would otherwise be dropped by Python's lastResort.
+# Stream to stdout so Cloud Run maps these as DEFAULT severity rather than
+# ERROR (its stderr default).
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 
