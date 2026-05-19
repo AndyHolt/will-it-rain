@@ -6,6 +6,7 @@ locals {
     "iamcredentials.googleapis.com",       # SA impersonation, WIF token minting
     "sts.googleapis.com",                  # WIF token exchange
     "storage.googleapis.com",              # state bucket
+    "cloudbilling.googleapis.com",         # billing-account IAM binding for TF SA
   ]
 }
 
