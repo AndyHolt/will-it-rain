@@ -8,7 +8,7 @@ repos:
       - id: check-json
       - id: pretty-format-json
         args: [--autofix, --indent, "2"]
-        exclude: ^frontend/
+        exclude: ^frontend/  # handled by biome
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: no-commit-to-branch
