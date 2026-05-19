@@ -34,15 +34,20 @@ def will_it_rain_pipeline(
     artefacts_bucket: str,
     model_display_name: str = DEFAULT_MODEL_DISPLAY_NAME,
 ) -> None:
+    # Caching off on the fetch tasks: their outputs depend on wall-clock time
+    # (new observations arrive daily), but their inputs don't change, so KFP
+    # would otherwise short-circuit to stale snapshots on every re-run.
+    # Downstream tasks keep caching on — they'll cache-miss naturally when
+    # the fresh fetch outputs differ.
     fetch_forecast = fetch_forecast_op(
         latitude=latitude,
         longitude=longitude,
         start_date=training_window_start_date,
-    )
+    ).set_caching_options(False)
     fetch_observations = fetch_observations_op(
         site_code=site_code,
         start_date=training_window_start_date,
-    )
+    ).set_caching_options(False)
     prepare = prepare_op(
         forecast=fetch_forecast.outputs["forecast"],
         observations=fetch_observations.outputs["observations"],
