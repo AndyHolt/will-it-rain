@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Un-ignore src/lib/ — the root .gitignore's Python-packaging `lib/` rule
+# would otherwise swallow shadcn's src/lib/utils.ts.
+!src/lib/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
