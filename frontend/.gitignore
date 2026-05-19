@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.vite
 
 # Un-ignore src/lib/ — the root .gitignore's Python-packaging `lib/` rule
 # would otherwise swallow shadcn's src/lib/utils.ts.

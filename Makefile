@@ -19,32 +19,34 @@ BACKEND_SERVICE       := backend
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
 BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
+BACKEND_DEV_PORT       ?= 8080
 
 # Files baked into the pipeline image. If any of these change, the image
 # must be rebuilt before the next Vertex run, otherwise `:latest` will
 # serve stale code. The YAML spec depends on a narrower set (see below)
 # because @dsl.component captures only the wrapper function bodies.
 IMAGE_SOURCES    := pipeline/Dockerfile \
-                    pyproject.toml uv.lock \
-                    pipeline/pyproject.toml \
-                    will_it_rain_shared/pyproject.toml \
-                    $(shell find pipeline/src -name '*.py') \
-                    $(shell find will_it_rain_shared/src -name '*.py')
+		    pyproject.toml uv.lock \
+		    pipeline/pyproject.toml \
+		    will_it_rain_shared/pyproject.toml \
+		    $(shell find pipeline/src -name '*.py') \
+		    $(shell find will_it_rain_shared/src -name '*.py')
 
 BACKEND_IMAGE_SOURCES := backend/Dockerfile \
-                         pyproject.toml uv.lock \
-                         backend/pyproject.toml \
-                         will_it_rain_shared/pyproject.toml \
-                         $(shell find backend/src -name '*.py') \
-                         $(shell find will_it_rain_shared/src -name '*.py')
+			 pyproject.toml uv.lock \
+			 backend/pyproject.toml \
+			 will_it_rain_shared/pyproject.toml \
+			 $(shell find backend/src -name '*.py') \
+			 $(shell find will_it_rain_shared/src -name '*.py')
 
 .DEFAULT_GOAL := help
 
 .PHONY: help \
-        lint format-check typecheck test check \
-        lint-fix format fix prek \
-        image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
-        backend-image backend-deploy
+	lint format-check typecheck test check \
+	lint-fix format fix prek \
+	backend-dev frontend-dev dev \
+	image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
+	backend-image backend-deploy
 
 # ---------------------------------------------------------------------------
 # Dev tooling
@@ -82,6 +84,31 @@ fix: lint-fix format ## all auto-fixers
 # enforces locally and what the prek hook job runs in CI.
 prek: ## prek run --all-files
 	prek run --all-files
+
+# ---------------------------------------------------------------------------
+# Local dev servers
+# ---------------------------------------------------------------------------
+#
+# Each restart re-downloads the @production .joblib from GCS. Requires gcloud
+# ADC (`gcloud auth application-default login`) for Vertex + GCS access.
+backend-dev: ## reloading FastAPI server on $(BACKEND_DEV_PORT)
+	uv run --package backend uvicorn backend.main:app \
+	    --reload \
+	    --reload-dir backend/src \
+	    --reload-dir will_it_rain_shared/src \
+	    --host 127.0.0.1 \
+	    --port $(BACKEND_DEV_PORT)
+
+# Vite dev server with HMR. The vite config proxies /api/* to the backend at
+# 127.0.0.1:8080, so the frontend hits same-origin URLs and no CORS config is
+# needed on the backend.
+frontend-dev: ## Vite dev server (proxies /api -> backend-dev)
+	pnpm -C frontend dev
+
+# Convenience: run both dev servers in parallel. `make -j2` lets Ctrl-C take
+# down both children together.
+dev: ## run backend-dev and frontend-dev together (make -j2)
+	$(MAKE) -j2 backend-dev frontend-dev
 
 # ---------------------------------------------------------------------------
 # Pipeline build / compile / deploy
