@@ -8,3 +8,8 @@ weather_longitude = -0.13
 # COSMOS UK weather station site code.
 # Browse stations at https://cosmos-api.ceh.ac.uk/python_examples#Site-list
 cosmos_uk_site_code = "<COSMOS_UK_SITE_CODE>"
+
+# Recipient for pipeline-run alert emails. Cloud Monitoring's email
+# notification channels require an explicit address — there's no
+# "send to project owner" fallback for alert policies.
+notification_email = "<YOUR_EMAIL>"

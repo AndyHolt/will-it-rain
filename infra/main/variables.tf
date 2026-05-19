@@ -30,6 +30,11 @@ variable "cosmos_uk_site_code" {
   description = "COSMOS UK weather station site code (used for observations fetch)."
 }
 
+variable "notification_email" {
+  type        = string
+  description = "Recipient of pipeline-run alert emails (success/failure/cancelled)."
+}
+
 # ---------------------------------------------------------------------------
 # Non-secret config with sensible defaults.
 # Override via TF_VAR_<name> in CI to pin per-commit artefacts, etc.
