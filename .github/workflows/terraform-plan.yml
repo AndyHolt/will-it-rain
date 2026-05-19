@@ -1,0 +1,41 @@
+name: terraform plan
+
+# Surfaces infra diffs at PR review time. Read-only (no `apply`), but
+# authenticates as the terraform SA via WIF so refresh succeeds.
+#
+# scheduler.tf reads the compiled pipeline YAML from GCS at plan time,
+# so plan output reflects the *currently-uploaded* spec, not whatever
+# the PR would compile. A PR whose only change is pipeline code will
+# show "no diff" here — that's expected; the deploy workflow uploads
+# the new spec before its apply step.
+
+on:
+  pull_request:
+    paths:
+      - 'infra/main/**'
+      - '.github/workflows/terraform-plan.yml'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write # post the plan summary as a comment
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_weather_latitude: ${{ secrets.WEATHER_LATITUDE }}
+      TF_VAR_weather_longitude: ${{ secrets.WEATHER_LONGITUDE }}
+      TF_VAR_cosmos_uk_site_code: ${{ secrets.COSMOS_UK_SITE_CODE }}
+      TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/597101211776/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: terraform@will-it-rain-496215.iam.gserviceaccount.com
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform init
+        run: terraform -chdir=infra/main init -input=false
+      - name: Terraform plan
+        run: terraform -chdir=infra/main plan -input=false -no-color
