@@ -6,6 +6,10 @@ the current forecast for inference. Column shape (`{model}__{variable}`)
 matches the historical fetcher so the same feature builder works on both.
 """
 
+import logging
+import threading
+import time
+
 import openmeteo_requests
 import pandas as pd
 from niquests import RetryConfiguration, Session
@@ -16,6 +20,16 @@ from will_it_rain_shared.forecast import (
     FORECAST_VARIABLES,
     model_to_name,
 )
+
+logger = logging.getLogger(__name__)
+
+# Open-Meteo refreshes the forecast endpoint at most hourly, so a short
+# in-process TTL avoids hammering them during e.g. frontend reload loops
+# without serving meaningfully stale data.
+_CACHE_TTL_SECONDS = 600
+
+_cache_lock = threading.Lock()
+_cache: dict[tuple[float, float, int, int], tuple[float, pd.DataFrame]] = {}
 
 
 def fetch_live_forecast(
@@ -30,7 +44,19 @@ def fetch_live_forecast(
     Returns a frame indexed by hourly UTC ``date`` with columns named
     ``{model}__{variable}``. ``past_hours`` must cover the largest lag the
     model uses; the default 24h is comfortably above the configured lags.
+
+    Results are cached in-process for ``_CACHE_TTL_SECONDS`` keyed on the
+    request parameters.
     """
+    key = (latitude, longitude, past_hours, forecast_hours)
+    now = time.monotonic()
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is not None and now - entry[0] < _CACHE_TTL_SECONDS:
+            logger.info("forecast cache hit (age %.0fs)", now - entry[0])
+            return entry[1]
+
+    logger.info("forecast cache miss — fetching from Open-Meteo")
     session = Session(retries=RetryConfiguration(total=5, backoff_factor=0.2))
     client = openmeteo_requests.Client(session=session)
 
@@ -73,7 +99,10 @@ def fetch_live_forecast(
     if combined is None:
         raise RuntimeError("Open-Meteo returned no responses for the given parameters.")
 
-    return combined.set_index("date").sort_index()
+    result = combined.set_index("date").sort_index()
+    with _cache_lock:
+        _cache[key] = (time.monotonic(), result)
+    return result
 
 
 def pick_anchor(forecast: pd.DataFrame, now_utc: pd.Timestamp | None = None) -> pd.Timestamp:
