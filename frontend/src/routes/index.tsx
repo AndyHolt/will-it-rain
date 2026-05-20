@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 function Shell({ children, status }: { children: React.ReactNode; status?: string }) {
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-6 px-6 py-12">
+    <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-6 px-4 py-12 sm:px-6">
       <h1 className="text-3xl font-semibold tracking-tight">Will it rain?</h1>
       {children}
       <p
@@ -45,12 +45,12 @@ function PendingComponent() {
       <section
         aria-busy="true"
         aria-live="polite"
-        className="w-full rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm"
+        className="w-full rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-6"
       >
         <Skeleton className="h-4 w-40" />
-        <div className="mt-3 flex items-center gap-5">
+        <div className="mt-3 flex items-center gap-3 sm:gap-5">
           <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
-          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-9 max-w-full min-w-0 flex-1 sm:w-56 sm:flex-none" />
         </div>
         <Skeleton className="mt-6 h-5 w-16" />
       </section>
@@ -85,13 +85,13 @@ function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshin
   const Icon = data.will_rain ? CloudRain : Cloud;
 
   return (
-    <section className="w-full rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm">
+    <section className="w-full rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm sm:p-6">
       <p className="text-sm text-muted-foreground">
         Forecast for {formatRange(data.anchor_utc, data.window_end_utc)}
       </p>
-      <div className="mt-3 flex items-center gap-5">
+      <div className="mt-3 flex items-center gap-3 sm:gap-5">
         <Icon className="h-10 w-10 shrink-0" aria-hidden="true" strokeWidth={2} />
-        <p className="text-4xl font-semibold">{verdict}</p>
+        <p className="min-w-0 text-3xl font-semibold break-words sm:text-4xl">{verdict}</p>
       </div>
       <Collapsible className="mt-6">
         <CollapsibleTrigger className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -102,7 +102,7 @@ function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshin
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
+          <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
             <Stat label="Rain probability" value={`${pct}%`} />
             <Stat label="Decision threshold" value={`${Math.round(data.threshold * 100)}%`} />
             <Stat label="Model version" value={data.model_version} />
@@ -116,9 +116,9 @@ function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshin
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium">{value}</dd>
+      <dd className="mt-0.5 font-medium break-words">{value}</dd>
     </div>
   );
 }
