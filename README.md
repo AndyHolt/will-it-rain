@@ -19,10 +19,11 @@ rain, while BBC weather overpredicts.
 
 <figure align="center">
   <p align="center"><img src="docs/apple-forecast.png" alt="Apple Weather forecast showing a mostly dry week" width="45%" /> <img src="docs/bbc-forecast.png" alt="BBC Weather forecast showing rain on most days of the same week" width="45%" /></p>
-  <figcaption><sub><em>Forecasts from Apple Weather (left) and BBC Weather (right)
+  <figcaption align="center"><table align="center" width="80%"><tr><td align="center"><sub><em>Forecasts from Apple Weather (left) and BBC Weather (right)
   for the same time. Apple predicts dry, BBC predicts likely to rain. This is
-  representative of what I have observed as systematic optimistic/pessimistic variation between the two.</em></sub></figcaption>
+  representative of what I have observed as systematic optimistic/pessimistic variation between the two.</em></sub></td></tr></table></figcaption>
 </figure>
+<br/>
 
 Since these are regular variances, not completely random, it suggests that with
 accurate local data for rainfall, a model can learn a more accurate prediction
@@ -79,14 +80,15 @@ challenger beats the champion by a margin.
 
 <figure align="center">
   <img src="docs/pipeline-graph.png" alt="Vertex AI pipeline graph: fetch-forecast and fetch-observations feed prepare, then train, then evaluate, then a register-and-promote group containing register and promote." width="280" />
-  <figcaption><sub><em>Vertex AI training pipeline. Fetches historic forecasts and
+  <figcaption align="center"><table align="center" width="80%"><tr><td align="center"><sub><em>Vertex AI training pipeline. Fetches historic forecasts and
   real observations, then prepares training data (features and labels) from
   these. Runs model training using the new data set, then evaluates the new
   model. The register and promote step is gated on the model performing better
   than the persistence baseline. If gate condition passes, the new model is
   registered, and promoted only if the new model (challenger) performs better
-  than the existing production model (champion) on the same test data set.</em></sub></figcaption>
+  than the existing production model (champion) on the same test data set.</em></sub></td></tr></table></figcaption>
 </figure>
+<br/>
 
 ## Frontend
 
