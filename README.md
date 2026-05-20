@@ -101,3 +101,83 @@ hours (a four hour window, starting at the most recent hour).
 
 Additional details are displayed, such as calibrated rain probability and the
 model's decision threshold.
+
+## Technical challenges and design decisions
+
+### Data availability
+
+Since the data of past forecasts from Apple and the BBC are not available, we
+can't use those directly. One option would be to collect hour-by-hour forecasts
+until we have enough to train a model, but that would take a long time.
+
+Since the aim isn't so much to learn the biases of the Apple and BBC forecasts,
+but to get a more accurate forecast for one particular location, it doesn't
+matter if the input data is the original forecasts I observed or upstream
+models, so long as we can train a more accurate model for the specific location.
+
+My biggest initial question to validate the whole project was whether training a
+small model at a workable scale could possibly beat the enormous and complex
+models that serve the main forecasts. The data available from Open-Meteo was
+adequate for validating this question.
+
+More exploration into available data, or collecting data specifically for the
+project, may yield better models over time. But I wanted to get a model working
+quickly and deployed, get the system in place to make it useful, and then
+consider iterating the model and input data from there.
+
+### Forecast granularity and matching availability for inference
+
+The next challenge on the available data is matching what the historical
+forecast data means with the data that's available at inference time.
+
+The specific metric I want to predict is "given the current forecasts, what is
+most likely in the next 4 hours". At time T, I want to predict what will happen
+in the interval (T, T+4h). And the available data at time T are the current
+forecasts for each hourly range: (T+1h, T+2h, T+3h, T+4h)
+
+However, the Open-Meteo data does not allow looking back to what the forecast
+was at, say, 11am on a particular date for the time 1pm. Instead, it gives the
+hourly forecast for each our, using the model window. For hourly models, this
+means each hour window gets its immediate single hour forecast. In other words,
+over a four hour window, we can get (T+1h, (T+1)+1h, (T+2)+1h, (T+3)+1h).
+
+At inference time, this would require being able to see 3 hours into the future,
+to see what the forecast in 3 hours time will be for the 4th hour of the
+interval.
+
+So to make it an even playing field, I cut off forecasts at the "present"
+moment to forecast over a 4 hour window. forecasts for previous time to T can be
+used, but no forward looking forecasts.
+
+This almost certainly reduces the quality of the model. But it keeps us honest
+about the model predictive performance.
+
+### Seasonality and threshold calibration
+
+Splitting available window leads to training, validating and test windows
+covering different seasons, with different total rainfall.
+
+### Scheduling Vertex AI Pipeline using Terraform
+
+Scheduling a Vertex Pipeline run using Terraform is not trivial.
+
+Canonical reference seems to be Datatonic blog post:
+https://datatonic.com/insights/vertex-ai-pipelines-terraform-cloud-scheduler/
+
+Uses a Cloud Scheduler which runs weekly, sending HTTP request to create
+pipeline job. Jobs are then "one off" runs.
+
+Bit of a split in responsibilities between CI/CD uploading new YAML, and TF
+running job which fetches pipeline config and runs it.
+
+Alternative: set up schedule in console.
+
+### Serving from new model after promotion
+
+Work in progress (see open PR).
+
+Pipeline sends pub/sub message, which runs cloud function to force refresh of
+backend services.
+
+Aiming to keep backend service simple, without needing to refresh model during
+service lifetime.
