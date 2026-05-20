@@ -79,7 +79,7 @@ against the current production champion on the same held-out test set; the
 challenger beats the champion by a margin.
 
 <figure align="center">
-  <img src="docs/pipeline-graph.png" alt="Vertex AI pipeline graph: fetch-forecast and fetch-observations feed prepare, then train, then evaluate, then a register-and-promote group containing register and promote." width="280" />
+  <p align="center"><img src="docs/pipeline-graph.png" alt="Vertex AI pipeline graph: fetch-forecast and fetch-observations feed prepare, then train, then evaluate, then a register-and-promote group containing register and promote." width="280" /></p>
   <figcaption align="center"><table align="center" width="80%"><tr><td align="center"><sub><em>Vertex AI training pipeline. Fetches historic forecasts and
   real observations, then prepares training data (features and labels) from
   these. Runs model training using the new data set, then evaluates the new
