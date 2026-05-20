@@ -126,10 +126,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 function formatRange(startIso: string, endIso: string) {
   const start = new Date(startIso);
   const end = new Date(endIso);
-  const fmt: Intl.DateTimeFormatOptions = {
-    weekday: "short",
+  const timeFmt: Intl.DateTimeFormatOptions = {
     hour: "2-digit",
     minute: "2-digit",
   };
-  return `${start.toLocaleString(undefined, fmt)} – ${end.toLocaleString(undefined, fmt)}`;
+  const dayTimeFmt: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    ...timeFmt,
+  };
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate();
+  const startStr = start.toLocaleString(undefined, dayTimeFmt);
+  const endStr = end.toLocaleString(undefined, sameDay ? timeFmt : dayTimeFmt);
+  return `${startStr} – ${endStr}`;
 }
