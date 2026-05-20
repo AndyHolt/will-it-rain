@@ -1,7 +1,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, type ErrorComponentProps } from "@tanstack/react-router";
-import { Cloud, CloudRain } from "lucide-react";
+import { ChevronDown, Cloud, CloudRain } from "lucide-react";
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type PredictResponse, predictQueryOptions } from "@/forecast/fetch";
 
@@ -47,27 +48,13 @@ function PendingComponent() {
         className="w-full rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm"
       >
         <Skeleton className="h-4 w-40" />
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex items-center gap-5">
           <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
           <Skeleton className="h-9 w-56" />
         </div>
-        <dl className="mt-6 grid grid-cols-2 gap-4">
-          <SkeletonStat />
-          <SkeletonStat />
-          <SkeletonStat />
-          <SkeletonStat />
-        </dl>
+        <Skeleton className="mt-6 h-5 w-16" />
       </section>
     </Shell>
-  );
-}
-
-function SkeletonStat() {
-  return (
-    <div>
-      <Skeleton className="h-3 w-24" />
-      <Skeleton className="mt-1.5 h-4 w-16" />
-    </div>
   );
 }
 
@@ -106,12 +93,23 @@ function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshin
         <Icon className="h-10 w-10 shrink-0" aria-hidden="true" strokeWidth={2} />
         <p className="text-4xl font-semibold">{verdict}</p>
       </div>
-      <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
-        <Stat label="Rain probability" value={`${pct}%`} />
-        <Stat label="Decision threshold" value={`${Math.round(data.threshold * 100)}%`} />
-        <Stat label="Model version" value={data.model_version} />
-        <Stat label="Status" value={isRefreshing ? "Refreshing…" : "Up to date"} />
-      </dl>
+      <Collapsible className="mt-6">
+        <CollapsibleTrigger className="group flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          Details
+          <ChevronDown
+            className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180"
+            aria-hidden="true"
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <Stat label="Rain probability" value={`${pct}%`} />
+            <Stat label="Decision threshold" value={`${Math.round(data.threshold * 100)}%`} />
+            <Stat label="Model version" value={data.model_version} />
+            <Stat label="Status" value={isRefreshing ? "Refreshing…" : "Up to date"} />
+          </dl>
+        </CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
