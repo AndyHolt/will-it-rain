@@ -38,7 +38,10 @@ without spending a few years collecting such forecast data in preparation, we
 can't use the Apple and BBC forecasts themselves.
 
 But the underlying models which I think they use are made available through
-Open-Meteo.
+Open-Meteo. Apple's [Weather data
+sources](https://support.apple.com/en-gb/105038) lists ECMWF and The Met Office,
+while [BBC Weather](https://www.bbc.co.uk/weather) lists The Met Office as a
+major source.
 
 ## Data sources
 
