@@ -8,7 +8,12 @@ resource "google_cloud_run_v2_service" "backend" {
     max_instance_request_concurrency = 80
 
     scaling {
-      min_instance_count = 0
+      # min=1 keeps one warm instance to avoid the ~20s cold-start path
+      # (container boot + lightgbm/aiplatform imports + Vertex Model.list +
+      # GCS .joblib download). Idle CPU is throttled outside requests, so
+      # ongoing cost is mostly the pinned 1Gi of memory. Drop back to 0
+      # once the model is baked into the image and cold start is fast.
+      min_instance_count = 1
       max_instance_count = 3
     }
 
@@ -24,6 +29,9 @@ resource "google_cloud_run_v2_service" "backend" {
           cpu    = "1"
           memory = "1Gi"
         }
+        # Free during the startup window; doubles available CPU while
+        # imports + model load run.
+        startup_cpu_boost = true
       }
 
       env {
