@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, type ErrorComponentProps } from "@tanstack/react-router";
 import { Cloud, CloudRain } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { type PredictResponse, predictQueryOptions } from "@/forecast/fetch";
 
 export const Route = createFileRoute("/")({
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/")({
 
 function Shell({ children, status }: { children: React.ReactNode; status?: string }) {
   return (
-    <main className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-6 px-6 py-12">
+    <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-6 px-6 py-12">
       <h1 className="text-3xl font-semibold tracking-tight">Will it rain?</h1>
       {children}
       <p
@@ -45,10 +46,10 @@ function PendingComponent() {
         aria-live="polite"
         className="w-full rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm"
       >
-        <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+        <Skeleton className="h-4 w-40" />
         <div className="mt-3 flex items-center gap-3">
-          <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-muted" />
-          <div className="h-9 w-56 animate-pulse rounded bg-muted" />
+          <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+          <Skeleton className="h-9 w-56" />
         </div>
         <dl className="mt-6 grid grid-cols-2 gap-4">
           <SkeletonStat />
@@ -64,8 +65,8 @@ function PendingComponent() {
 function SkeletonStat() {
   return (
     <div>
-      <div className="h-3 w-24 animate-pulse rounded bg-muted" />
-      <div className="mt-1.5 h-4 w-16 animate-pulse rounded bg-muted" />
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="mt-1.5 h-4 w-16" />
     </div>
   );
 }
@@ -101,7 +102,7 @@ function Prediction({ data, isRefreshing }: { data: PredictResponse; isRefreshin
       <p className="text-sm text-muted-foreground">
         Forecast for {formatRange(data.anchor_utc, data.window_end_utc)}
       </p>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex items-center gap-5">
         <Icon className="h-10 w-10 shrink-0" aria-hidden="true" strokeWidth={2} />
         <p className="text-4xl font-semibold">{verdict}</p>
       </div>
