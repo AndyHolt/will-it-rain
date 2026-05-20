@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 
 function Shell({ children, status }: { children: React.ReactNode; status?: string }) {
   return (
-    <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-6 px-4 py-12 sm:px-6">
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 px-4 py-12 sm:px-6">
       <h1 className="text-3xl font-semibold tracking-tight">Will it rain?</h1>
       {children}
       <p
