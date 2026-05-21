@@ -56,7 +56,8 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	frontend-lint-fix frontend-format frontend-fix \
 	check fix prek \
 	backend-dev frontend-dev dev \
-	image compile-pipeline upload-pipeline deploy-pipeline trigger-run clean \
+	image compile-pipeline upload-pipeline deploy-pipeline \
+	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
 	frontend-build frontend-deploy
@@ -171,8 +172,8 @@ dev: ## run backend-dev and frontend-dev together (make -j2)
 # which doesn't work for cross-platform builds anyway).
 #
 # The sentinel file records the last successful push. Downstream targets
-# (trigger-run, deploy-pipeline) depend on it so they rebuild + push when
-# any IMAGE_SOURCES file is newer than the sentinel.
+# (trigger-pipeline-from-local, deploy-pipeline) depend on it so they
+# rebuild + push when any IMAGE_SOURCES file is newer than the sentinel.
 image: $(IMAGE_SENTINEL)
 
 $(IMAGE_SENTINEL): $(IMAGE_SOURCES)
@@ -199,12 +200,23 @@ upload-pipeline: $(PIPELINE_SPEC)
 # End-to-end: rebuild image, recompile pipeline, upload.
 deploy-pipeline: image upload-pipeline
 
-# Submit a one-off pipeline run via the aiplatform SDK. Depends on both
-# the compiled spec and a current image — without the latter, Vertex would
-# pull a stale :latest and changes to component bodies (e.g. train.py)
-# would silently fail to take effect.
-trigger-run: $(PIPELINE_SPEC) $(IMAGE_SENTINEL)
+# Build image + spec from the working tree, then submit a one-off pipeline
+# run via the aiplatform SDK. Use this when iterating on pipeline code —
+# the run reflects local edits, not what's deployed. Depends on both the
+# compiled spec and a current image; without the latter, Vertex would pull
+# a stale :latest and changes to component bodies (e.g. train.py) would
+# silently fail to take effect.
+trigger-pipeline-from-local: $(PIPELINE_SPEC) $(IMAGE_SENTINEL)
 	uv run --package pipeline python -m pipeline.trigger
+
+# Fire the Cloud Scheduler job that the weekly cron also fires. Runs the
+# pipeline spec currently staged in GCS (gs://…-model-artefacts/pipelines/
+# will-it-rain.yaml) — i.e. whatever CI last published from main — against
+# the :latest pipeline image in Artifact Registry. Use this for off-cycle
+# runs of the deployed pipeline; no local build happens.
+trigger-pipeline-via-scheduler:
+	gcloud scheduler jobs run will-it-rain-weekly-training \
+	    --location=$(REGION)
 
 # ---------------------------------------------------------------------------
 # Backend build / deploy
