@@ -174,10 +174,35 @@ Alternative: set up schedule in console.
 
 ### Serving from new model after promotion
 
-Work in progress (see open PR).
+When a new model is promoted, the backend instance(s) serving the replaced model
+need to switch over to the new model.
 
-Pipeline sends pub/sub message, which runs cloud function to force refresh of
-backend services.
+One way to handle this would be on every request to check that the model is up
+to date, and load the new model if required. But this adds complexity and
+latency to every request, to handle model updates that occur only very rarely.
+Other approaches which require the backend service to manage model updates also
+suffer from adding complexity to the backend service.
 
-Aiming to keep backend service simple, without needing to refresh model during
-service lifetime.
+Instead, we can add a new component to the system that responds to a promotion
+event by triggering a refresh of all deployed backend instances. When the
+backend instances restart, they will load the updated model, and serve from the
+new model for the rest of their lifespan. This keeps the concern completely out
+of the backend, at the cost of moving the complexity elsewhere.
+
+When the pipeline promotes a new model, a new pipeline component,
+`publish_promotion_op` sends a message to a pub/sub topic. This triggers a cloud
+run function, which marks backend instances as requiring refresh. Cloud Run will
+then rotate the live instances, and fresh instances will have the new model.
+
+This approach works well here because the cost of serving predictions from an
+outdated model during the overlap period is very small. Model improvements are
+expected to be incremental. So it will be better to quickly serve a prediction
+from an outdated model than have to wait for a new model to be loaded before
+serving the request.
+
+The main downside of this approach is adding the extra moving part: the cloud
+function that triggers the refresh in response to the pub/sub message. But this
+is a reasonable price to pay to keep the pipeline and backend services simple
+and without strong coupling.
+
+See [PR #41](https://github.com/AndyHolt/will-it-rain/pull/41).
