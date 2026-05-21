@@ -81,11 +81,13 @@ locals {
   tf_sa_project_roles = [
     "roles/aiplatform.admin",                # Vertex pipelines, Model Registry
     "roles/artifactregistry.admin",          # AR repo + push images
+    "roles/cloudfunctions.admin",            # model-refresher Cloud Function (gen 2)
     "roles/cloudscheduler.admin",            # weekly training schedule
     "roles/firebase.admin",                  # Firebase project enrolment + Hosting deploy
-    "roles/iam.serviceAccountAdmin",         # create pipeline/backend/scheduler SAs
+    "roles/iam.serviceAccountAdmin",         # create pipeline/backend/scheduler/refresher SAs
     "roles/iam.serviceAccountUser",          # act-as backend SA when deploying Cloud Run revisions
     "roles/monitoring.admin",                # pipeline-finished alert policy
+    "roles/pubsub.admin",                    # model-promoted topic + IAM bindings on it
     "roles/resourcemanager.projectIamAdmin", # project IAM bindings for the SAs above
     "roles/run.admin",                       # Cloud Run service + revisions
     "roles/serviceusage.serviceUsageAdmin",  # enable APIs in infra/main/apis.tf
