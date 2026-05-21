@@ -36,6 +36,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
+      model_refresher: ${{ steps.filter.outputs.model_refresher }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -58,6 +59,9 @@ jobs:
               - 'frontend/**'
             infra:
               - 'infra/main/**'
+            model_refresher:
+              - 'model_refresher/**'
+              - 'Makefile'
 
   # ---------------------------------------------------------------------------
   # Build + push container images. Both jobs are independent; either or both
@@ -124,18 +128,47 @@ jobs:
         run: make upload-pipeline
 
   # ---------------------------------------------------------------------------
-  # Apply infra. Needed when either:
+  # Zip the model-refresher source and upload to GCS.
+  # infra/main/model_refresh.tf reads the object's generation to roll a new
+  # revision, so this MUST run before terraform-apply when the model_refresher
+  # source changes. Same staged-artifact pattern as the pipeline YAML.
+  # ---------------------------------------------------------------------------
+  upload-model-refresher-source:
+    needs: changes
+    if: needs.changes.outputs.model_refresher == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Zip and upload model-refresher source
+        run: make upload-model-refresher-source
+
+  # ---------------------------------------------------------------------------
+  # Apply infra. Needed when:
   #   - infra HCL changed (resource shape), or
-  #   - pipeline changed (scheduler.tf reads the freshly-uploaded YAML).
+  #   - pipeline changed (scheduler.tf reads the freshly-uploaded YAML), or
+  #   - model_refresher changed (model_refresh.tf reads the freshly-uploaded zip).
   # Backend/frontend code changes don't change TF state (backend image is
   # pinned to :latest in TF, deployed revisions come from `make backend-deploy`).
   # ---------------------------------------------------------------------------
   terraform-apply:
-    needs: [changes, compile-and-upload-pipeline, build-pipeline-image, build-backend-image]
+    needs:
+      [
+        changes,
+        compile-and-upload-pipeline,
+        upload-model-refresher-source,
+        build-pipeline-image,
+        build-backend-image,
+      ]
     if: |
       always() &&
-      (needs.changes.outputs.pipeline == 'true' || needs.changes.outputs.infra == 'true') &&
+      (needs.changes.outputs.pipeline == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.model_refresher == 'true') &&
       (needs.compile-and-upload-pipeline.result == 'success' || needs.compile-and-upload-pipeline.result == 'skipped') &&
+      (needs.upload-model-refresher-source.result == 'success' || needs.upload-model-refresher-source.result == 'skipped') &&
       (needs.build-pipeline-image.result == 'success' || needs.build-pipeline-image.result == 'skipped') &&
       (needs.build-backend-image.result == 'success' || needs.build-backend-image.result == 'skipped')
     runs-on: ubuntu-latest

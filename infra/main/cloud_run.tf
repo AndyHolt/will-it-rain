@@ -54,7 +54,28 @@ resource "google_cloud_run_v2_service" "backend" {
         name  = "LONGITUDE"
         value = var.weather_longitude
       }
+
+      # Bumped out-of-band by the model-refresher Cloud Function when the
+      # @production alias moves (see model_refresh.tf). The value here is a
+      # placeholder for the initial create; once the function has run, terraform
+      # ignores changes (see lifecycle below) so the two don't fight.
+      env {
+        name  = "MODEL_REFRESH_AT"
+        value = ""
+      }
     }
+  }
+
+  # MODEL_REFRESH_AT is bumped by the model-refresher Cloud Function on every
+  # alias move. Without this, every subsequent `terraform apply` would try to
+  # reset it back to "" and tear down the freshly-rolled revision. Ignoring
+  # the whole env block is overly broad — but per-env-var ignore is awkward in
+  # the v2 schema (env is a list, not a map) and the env block is otherwise
+  # short and rarely changes. Manual env-var updates need a code-side change
+  # plus a follow-up `gcloud run services update --update-env-vars=...` (or
+  # accept the next refresher run resetting them).
+  lifecycle {
+    ignore_changes = [template[0].containers[0].env]
   }
 
   depends_on = [google_project_service.main]

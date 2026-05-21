@@ -11,6 +11,8 @@ locals {
     "firebase.googleapis.com",         # Firebase project enrolment
     "firebasehosting.googleapis.com",  # frontend hosting
     "monitoring.googleapis.com",       # alert policy + notification channel for pipeline runs
+    "pubsub.googleapis.com",           # model-promoted topic → backend refresher
+    "eventarc.googleapis.com",         # Pub/Sub → Cloud Function trigger
   ]
 }
 
