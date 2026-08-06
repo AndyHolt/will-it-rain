@@ -40,12 +40,6 @@ variable "notification_email" {
 # Override via TF_VAR_<name> in CI to pin per-commit artefacts, etc.
 # ---------------------------------------------------------------------------
 
-variable "pipeline_template_uri" {
-  type        = string
-  description = "GCS URI of the compiled pipeline JSON. Override in CI to pin per-commit."
-  default     = "gs://will-it-rain-496215-model-artefacts/pipelines/will-it-rain.yaml"
-}
-
 variable "training_window_start_date" {
   type        = string
   description = "Earliest date to fetch forecast/observations data from (ISO date)."
@@ -60,6 +54,12 @@ variable "model_display_name" {
 
 variable "backend_image" {
   type        = string
-  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit."
-  default     = "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/backend:latest"
+  description = "Container image (incl. tag) for the Cloud Run backend. Defaults to :latest in this project's Artifact Registry repo (see local.backend_image); override in CI to pin per-commit."
+  default     = null
+}
+
+variable "hosting_site_id" {
+  type        = string
+  description = "Firebase Hosting site ID, which fixes the public URL at https://<site_id>.web.app. Deliberately independent of project_id so the URL survives a project migration."
+  default     = "will-it-rain-496215"
 }

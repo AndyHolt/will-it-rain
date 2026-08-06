@@ -1,3 +1,14 @@
+locals {
+  # Derived rather than defaulted on the variable, because variable defaults
+  # can't reference other variables — which is how the project ID ended up
+  # hardcoded here. coalesce keeps an explicit var.backend_image winning, so CI
+  # can still pin a per-commit digest.
+  backend_image = coalesce(
+    var.backend_image,
+    "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}/backend:latest",
+  )
+}
+
 resource "google_cloud_run_v2_service" "backend" {
   name                = "backend"
   location            = var.region
@@ -19,7 +30,7 @@ resource "google_cloud_run_v2_service" "backend" {
     }
 
     containers {
-      image = var.backend_image
+      image = local.backend_image
 
       ports {
         container_port = 8080

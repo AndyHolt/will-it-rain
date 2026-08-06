@@ -11,12 +11,14 @@ resource "google_firebase_project" "this" {
   depends_on = [google_project_service.main]
 }
 
-# Default site shares the project ID. One site is enough for v1; if we ever
-# need preview channels with custom hostnames we'd add more sites here.
+# One site is enough for v1; if we ever need preview channels with custom
+# hostnames we'd add more sites here. The site ID is its own variable rather
+# than var.project_id: it's the public hostname, so it shouldn't move every
+# time the project does.
 resource "google_firebase_hosting_site" "default" {
   provider = google-beta
 
-  site_id = var.project_id
+  site_id = var.hosting_site_id
 
   depends_on = [google_firebase_project.this]
 }
