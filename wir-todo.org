@@ -1,0 +1,34 @@
+* DONE notify with stats when evaluating model, including promotion status
+I think this should be sending an email to account?
+
+* DONE replace manual pipeline trigger with terraform-managed scheduled trigger
+Once the end-to-end system is up and running, swap the local
+~make trigger-run~ / ~pipeline.trigger~ flow for a Cloud Scheduler →
+Cloud Run Job (or Cloud Function) indirection, provisioned in Terraform.
+The job runs the same aiplatform SDK submit path as ~pipeline.trigger~, so
+the function body is roughly the current script. Keep the compiled spec in
+GCS (~make upload-pipeline~) rather than reading from ~build/~ at apply time.
+
+* DONE frontend style fixes
+- [X] Fix shadcn style setup
+- [X] Add a lucide icon to indicate forecast: `cloud-rain` when rain is forecast, and something suitable when it isn't. The challenge here is an indicator that means "rain not expected", but doesn't indicate any particular weather. I think the best option is to use the plain `cloud` icon, for symmetry with the rain icon. Sun would be wrong, both because it may not be sunny (i.e. cloudy), and it may be night. While cloud suggests not-blue-skies, I think its symmetry with the rain icon feels a bit more "not rain". It is also distinct from `cloudy`. Suggest alternatives if you like.
+- [X] Better loading status. Use a loading component, rather than a blank screen. Probably show skeleton loader? Maybe a loading status message?
+- [X]  Use shadcn UI elements. E.g. an item or a card instead of the current square box.
+- [X]  Put the additional details behind an "additional info" type display, so they are hidden by default. Possibly a shadcn Collapsible? Not sure what the right element type is. But hidden by default, and viewable if desired. (I think probably not a popover, but probably extra info within the main item/card, but hidden by default).
+- [X] Add a footer with basic information: by me (Andy Holt), link to GitHub repo. 6. I think it's probably also best to have a link in the footer that routes to a new page that links out to the data sources (open-meteo and COSMOS)
+* DONE backend: ensure fetching current forecast is cached
+* TODO fix favicon for display on iOS
+* TODO fix cold start time for backend
+- Need to determine what's actually taking so long
+- Possibly bake model into container?
+- Have model compiled into a lightweight format?
+- Replace Python with Go. Not only is the startup faster for compiled binary
+  than starting interpreter and importing packages, but also allows using a much
+  more lightweight container which can start up faster. But I suspect this isn't
+  the bottleneck!
+* TODO fix vertex pipeline runs
+Blocked by quota limit.
+
+Attempting to fix by migrating project into my main GCP account, instead of
+being isolated in a separate account.
+* TODO improve monitoring and alerting for pipeline runs
