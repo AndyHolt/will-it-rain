@@ -40,12 +40,6 @@ variable "notification_email" {
 # Override via TF_VAR_<name> in CI to pin per-commit artefacts, etc.
 # ---------------------------------------------------------------------------
 
-variable "pipeline_template_uri" {
-  type        = string
-  description = "GCS URI of the compiled pipeline JSON. Override in CI to pin per-commit."
-  default     = "gs://will-it-rain-496215-model-artefacts/pipelines/will-it-rain.yaml"
-}
-
 variable "training_window_start_date" {
   type        = string
   description = "Earliest date to fetch forecast/observations data from (ISO date)."
