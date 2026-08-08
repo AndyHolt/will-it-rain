@@ -1,13 +1,14 @@
+# Deliberately no defaults for project id and region: these come from config.env
+# at the repo root, via TF_VAR_project_id / TF_VAR_region.
+
 variable "project_id" {
   type        = string
-  description = "GCP project ID that hosts bootstrap resources."
-  default     = "will-it-rain-496215"
+  description = "GCP project ID that hosts bootstrap resources. From config.env."
 }
 
 variable "region" {
   type        = string
-  description = "Default region for regional resources."
-  default     = "europe-west2"
+  description = "Default region for regional resources. From config.env."
 }
 
 variable "tf_service_account_id" {

@@ -1,13 +1,16 @@
+# ---------------------------------------------------------------------------
+# No defaults for project id and region: these come from config.env at the
+# repo root, enforced as a single source of truth
+# ---------------------------------------------------------------------------
+
 variable "project_id" {
   type        = string
-  description = "GCP project ID."
-  default     = "will-it-rain-496215"
+  description = "GCP project ID. From config.env."
 }
 
 variable "region" {
   type        = string
-  description = "Default region for regional resources."
-  default     = "europe-west2"
+  description = "Default region for regional resources. From config.env."
 }
 
 # ---------------------------------------------------------------------------
@@ -52,8 +55,20 @@ variable "model_display_name" {
   default     = "will-it-rain"
 }
 
+# Defaults to the :latest image in this project's Artifact Registry repo. That
+# can't be written as `default = "${var.region}-…"` — a variable default must be
+# a constant expression — so it's null here and derived in the local below.
 variable "backend_image" {
   type        = string
-  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit."
-  default     = "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/backend:latest"
+  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit; null derives it from project_id and region."
+  default     = null
+}
+
+locals {
+  # coalesce skips null, so an explicit var.backend_image (CI pinning a
+  # per-commit tag) still wins over the derived default.
+  backend_image = coalesce(
+    var.backend_image,
+    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend:latest",
+  )
 }

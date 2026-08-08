@@ -14,6 +14,14 @@
 include config.env
 export PROJECT_ID REGION
 
+# Terraform reads its input variables from TF_VAR_-prefixed environment
+# variables, and project_id / region have no defaults on either module — a
+# defaulted project ID is how an apply lands in the wrong project. Exported
+# here so the tf-* recipes below carry them; CI exports the same pair itself.
+TF_VAR_project_id := $(PROJECT_ID)
+TF_VAR_region     := $(REGION)
+export TF_VAR_project_id TF_VAR_region
+
 ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME            := pipeline
@@ -65,7 +73,8 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
-	frontend-build frontend-deploy
+	frontend-build frontend-deploy \
+	tf-init tf-plan tf-apply
 
 # ---------------------------------------------------------------------------
 # Dev tooling
@@ -273,6 +282,29 @@ upload-model-refresher-source: $(MODEL_REFRESHER_ZIP)
 
 clean:
 	rm -rf build/
+
+# ---------------------------------------------------------------------------
+# Terraform
+# ---------------------------------------------------------------------------
+
+# Thin wrappers so terraform picks up TF_VAR_project_id / TF_VAR_region from
+# config.env — neither module defaults them, so a raw `terraform -chdir=…`
+# from an unexported shell just sits there prompting. -input=false makes that
+# a clear error rather than a hang.
+#
+# infra/main is the default; bootstrap is run as the human user, per
+# docs/cicd.md:
+#     make tf-apply TF_MODULE=infra/bootstrap
+TF_MODULE ?= infra/main
+
+tf-init:
+	terraform -chdir=$(TF_MODULE) init -input=false
+
+tf-plan:
+	terraform -chdir=$(TF_MODULE) plan -input=false
+
+tf-apply:
+	terraform -chdir=$(TF_MODULE) apply -input=false
 
 # ---------------------------------------------------------------------------
 # Frontend build / deploy
