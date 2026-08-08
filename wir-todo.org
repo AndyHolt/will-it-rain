@@ -32,3 +32,5 @@ Blocked by quota limit.
 Attempting to fix by migrating project into my main GCP account, instead of
 being isolated in a separate account.
 * TODO improve monitoring and alerting for pipeline runs
+* TODO consider impact of using colima instead of docker desktop for dev container runtime
+* TODO Model version in frontend to display training date, not just a version number
