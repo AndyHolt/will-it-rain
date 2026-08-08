@@ -22,8 +22,8 @@ permissions:
 # env can't be populated from a step). The WIF values stay literal: the
 # provider path embeds the project *number*, which config.env doesn't carry.
 env:
-  WIF_PROVIDER: projects/597101211776/locations/global/workloadIdentityPools/github-actions/providers/github
-  WIF_SERVICE_ACCOUNT: terraform@will-it-rain-496215.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/238441820154/locations/global/workloadIdentityPools/github-actions/providers/github
+  WIF_SERVICE_ACCOUNT: terraform@will-it-rain-496308.iam.gserviceaccount.com
 
 jobs:
   # ---------------------------------------------------------------------------
