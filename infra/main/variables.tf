@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
-# No defaults for project id and region: these come from config.env at the
-# repo root, enforced as a single source of truth
+# No defaults for project id, region and hosting site id: these come from
+# config.env at the repo root, enforced as a single source of truth
 # ---------------------------------------------------------------------------
 
 variable "project_id" {
@@ -11,6 +11,15 @@ variable "project_id" {
 variable "region" {
   type        = string
   description = "Default region for regional resources. From config.env."
+}
+
+# Not derived from project_id: the site id is the public hostname
+# (https://<id>.web.app), so tying it to the project would move the URL on
+# every project migration. frontend/firebase.json repeats the value — JSON
+# can't interpolate — and the two must agree.
+variable "hosting_site_id" {
+  type        = string
+  description = "Firebase Hosting site ID; becomes <id>.web.app. From config.env."
 }
 
 # ---------------------------------------------------------------------------

@@ -12,15 +12,16 @@
 # so recipes that shell out to Python (which reads them via
 # will_it_rain_shared.gcp) see the same values make does.
 include config.env
-export PROJECT_ID REGION
+export PROJECT_ID REGION HOSTING_SITE_ID
 
 # Terraform reads its input variables from TF_VAR_-prefixed environment
 # variables, and project_id / region have no defaults on either module — a
 # defaulted project ID is how an apply lands in the wrong project. Exported
-# here so the tf-* recipes below carry them; CI exports the same pair itself.
-TF_VAR_project_id := $(PROJECT_ID)
-TF_VAR_region     := $(REGION)
-export TF_VAR_project_id TF_VAR_region
+# here so the tf-* recipes below carry them; CI exports the same set itself.
+TF_VAR_project_id      := $(PROJECT_ID)
+TF_VAR_region          := $(REGION)
+TF_VAR_hosting_site_id := $(HOSTING_SITE_ID)
+export TF_VAR_project_id TF_VAR_region TF_VAR_hosting_site_id
 
 ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
@@ -73,7 +74,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
-	frontend-build frontend-deploy \
+	frontend-build frontend-site-check frontend-deploy \
 	tf-init tf-plan tf-apply
 
 # ---------------------------------------------------------------------------
@@ -316,8 +317,21 @@ frontend-build:
 	pnpm -C frontend install --frozen-lockfile
 	pnpm -C frontend build
 
+# frontend/firebase.json has to repeat HOSTING_SITE_ID — JSON can't
+# interpolate, and the Firebase CLI takes the site from firebase.json only
+# (no --site flag, no env override). Drift is silent rather than fatal: with
+# no matching "site", the CLI falls back to the project's *default* site and
+# happily publishes there, so the deploy "succeeds" against the wrong
+# hostname. Fail here instead.
+frontend-site-check:
+	@json_site=$$(python3 -c 'import json; print(json.load(open("frontend/firebase.json"))["hosting"]["site"])'); \
+	if [ "$$json_site" != "$(HOSTING_SITE_ID)" ]; then \
+	    echo "frontend/firebase.json site '$$json_site' != HOSTING_SITE_ID '$(HOSTING_SITE_ID)' in config.env"; \
+	    exit 1; \
+	fi
+
 # Publish the built SPA to Firebase Hosting. TF owns the site shape (project
 # enrolment, site, /api/** rewrite to Cloud Run); this just ships content,
 # mirroring the backend-deploy pattern. Requires `firebase login` once.
-frontend-deploy: frontend-build
+frontend-deploy: frontend-site-check frontend-build
 	cd frontend && firebase deploy --only hosting
