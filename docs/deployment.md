@@ -3,6 +3,11 @@
 Procedures for shipping each component. The gotchas that bite are summarised
 in `CLAUDE.md`; this file is the step-by-step.
 
+Every command below reads the target project and region from `config.env`.
+Terraform goes through `make tf-plan` / `make tf-apply` rather than
+`terraform -chdir=…`: the modules have no defaults for `project_id`, `region`
+or `hosting_site_id`, and the recipes are what export them.
+
 ## Pipeline trigger
 
 Cloud Scheduler fires `will-it-rain-weekly-training` every Sunday 02:00 UTC,
@@ -36,7 +41,7 @@ First-time bootstrap (order matters):
 
 ```
 make backend-image                     # builds + pushes :latest to AR
-terraform -chdir=infra/main apply      # creates the Cloud Run service
+make tf-apply                          # creates the Cloud Run service
 ```
 
 Subsequent code changes:
@@ -63,12 +68,19 @@ Hosting site, `/api/**` rewrite to the Cloud Run backend in
 First-time bootstrap:
 
 ```
-terraform -chdir=infra/main apply      # enrols project with Firebase, creates site
+make tf-apply                          # enrols project with Firebase, creates site
 firebase login                         # one-off, on the dev machine
 make frontend-deploy                   # builds dist/ and runs `firebase deploy --only hosting`
 ```
 
 Subsequent code changes: `make frontend-deploy` does both steps.
+
+The Hosting site id comes from `HOSTING_SITE_ID` in `config.env`, and is
+deliberately independent of the project id so the public URL doesn't move when
+the project does. `frontend/firebase.json` has to repeat it — the Firebase CLI
+takes the site from that file only — and `frontend-deploy` refuses to run if
+the two disagree, because the CLI's own behaviour on a mismatch is to publish
+to the project's default site without complaining.
 
 The Hosting rewrite in `firebase.json` targets the Cloud Run service by **name**
 (`backend` in `europe-west2`), not URL — so same-origin `/api/*` requests need

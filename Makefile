@@ -3,7 +3,7 @@
 #
 # Run from the repo root. Pipeline-side targets also assume:
 #   - gcloud is authenticated and `gcloud auth configure-docker
-#     europe-west2-docker.pkg.dev` has been run once.
+#     $(REGION)-docker.pkg.dev` has been run once.
 #   - Docker (with buildx) is running locally.
 #   - uv has the workspace synced.
 
