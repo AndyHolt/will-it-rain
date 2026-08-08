@@ -9,11 +9,13 @@ in the unwrapped functions in this same package.
 from kfp import dsl
 from kfp.dsl import Artifact, Dataset, Input, Metrics, Model, Output
 
+from will_it_rain_shared.gcp import IMAGE_REPO
+
 
 # Tag is set at submit time by the schedule resource — this is a placeholder.
-PIPELINE_IMAGE = (
-    "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/pipeline:latest"
-)
+# The import above runs at compile time only: KFP captures component function
+# bodies, so `will_it_rain_shared.gcp` is never imported inside the container.
+PIPELINE_IMAGE = f"{IMAGE_REPO}/pipeline:latest"
 
 # `install_kfp_package=False` on every component: kfp is already installed in
 # the base image via uv, and the uv-managed venv has no `pip`, so KFP's

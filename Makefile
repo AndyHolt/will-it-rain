@@ -7,8 +7,13 @@
 #   - Docker (with buildx) is running locally.
 #   - uv has the workspace synced.
 
-PROJECT_ID            := will-it-rain-496215
-REGION                := europe-west2
+# Project and region are declared once, in config.env at the repo root, and
+# shared with Terraform, CI and the deploy-time Python entry points. Exported
+# so recipes that shell out to Python (which reads them via
+# will_it_rain_shared.gcp) see the same values make does.
+include config.env
+export PROJECT_ID REGION
+
 ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME            := pipeline
@@ -140,8 +145,14 @@ prek: ## prek run --all-files
 #
 # Each restart re-downloads the @production .joblib from GCS. Requires gcloud
 # ADC (`gcloud auth application-default login`) for Vertex + GCS access.
+#
+# PROJECT / LOCATION are what the app-side settings (and Cloud Run, and the
+# Vertex SDK) call these; config.env uses the Makefile / TF_VAR_ names. Neither
+# pair can rename without breaking the other side, so map them here — in
+# deployment Terraform sets the app-side names directly and nothing maps.
 backend-dev: ## reloading FastAPI server on $(BACKEND_DEV_PORT)
-	uv run --package backend uvicorn backend.main:app \
+	PROJECT=$(PROJECT_ID) LOCATION=$(REGION) \
+	    uv run --package backend uvicorn backend.main:app \
 	    --reload \
 	    --reload-dir backend/src \
 	    --reload-dir will_it_rain_shared/src \

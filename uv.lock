@@ -1861,6 +1861,7 @@ dependencies = [
     { name = "openmeteo-sdk" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "scikit-learn" },
 ]
 
@@ -1874,5 +1875,6 @@ requires-dist = [
     { name = "openmeteo-sdk", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
 ]
