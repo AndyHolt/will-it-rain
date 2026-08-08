@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115.0",
+    "google-auth>=2.35.0",
     "lightgbm>=4.6.0",
     "niquests>=3.16.0",
     "numpy>=2.4.0",

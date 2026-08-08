@@ -3,12 +3,26 @@
 #
 # Run from the repo root. Pipeline-side targets also assume:
 #   - gcloud is authenticated and `gcloud auth configure-docker
-#     europe-west2-docker.pkg.dev` has been run once.
+#     $(REGION)-docker.pkg.dev` has been run once.
 #   - Docker (with buildx) is running locally.
 #   - uv has the workspace synced.
 
-PROJECT_ID            := will-it-rain-496215
-REGION                := europe-west2
+# Project and region are declared once, in config.env at the repo root, and
+# shared with Terraform, CI and the deploy-time Python entry points. Exported
+# so recipes that shell out to Python (which reads them via
+# will_it_rain_shared.gcp) see the same values make does.
+include config.env
+export PROJECT_ID REGION HOSTING_SITE_ID
+
+# Terraform reads its input variables from TF_VAR_-prefixed environment
+# variables, and project_id / region have no defaults on either module — a
+# defaulted project ID is how an apply lands in the wrong project. Exported
+# here so the tf-* recipes below carry them; CI exports the same set itself.
+TF_VAR_project_id      := $(PROJECT_ID)
+TF_VAR_region          := $(REGION)
+TF_VAR_hosting_site_id := $(HOSTING_SITE_ID)
+export TF_VAR_project_id TF_VAR_region TF_VAR_hosting_site_id
+
 ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME            := pipeline
@@ -60,7 +74,8 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
-	frontend-build frontend-deploy
+	frontend-build frontend-site-check frontend-deploy \
+	tf-init tf-plan tf-apply
 
 # ---------------------------------------------------------------------------
 # Dev tooling
@@ -140,8 +155,14 @@ prek: ## prek run --all-files
 #
 # Each restart re-downloads the @production .joblib from GCS. Requires gcloud
 # ADC (`gcloud auth application-default login`) for Vertex + GCS access.
+#
+# PROJECT / LOCATION are what the app-side settings (and Cloud Run, and the
+# Vertex SDK) call these; config.env uses the Makefile / TF_VAR_ names. Neither
+# pair can rename without breaking the other side, so map them here — in
+# deployment Terraform sets the app-side names directly and nothing maps.
 backend-dev: ## reloading FastAPI server on $(BACKEND_DEV_PORT)
-	uv run --package backend uvicorn backend.main:app \
+	PROJECT=$(PROJECT_ID) LOCATION=$(REGION) \
+	    uv run --package backend uvicorn backend.main:app \
 	    --reload \
 	    --reload-dir backend/src \
 	    --reload-dir will_it_rain_shared/src \
@@ -264,6 +285,29 @@ clean:
 	rm -rf build/
 
 # ---------------------------------------------------------------------------
+# Terraform
+# ---------------------------------------------------------------------------
+
+# Thin wrappers so terraform picks up TF_VAR_project_id / TF_VAR_region from
+# config.env — neither module defaults them, so a raw `terraform -chdir=…`
+# from an unexported shell just sits there prompting. -input=false makes that
+# a clear error rather than a hang.
+#
+# infra/main is the default; bootstrap is run as the human user, per
+# docs/cicd.md:
+#     make tf-apply TF_MODULE=infra/bootstrap
+TF_MODULE ?= infra/main
+
+tf-init:
+	terraform -chdir=$(TF_MODULE) init -input=false
+
+tf-plan:
+	terraform -chdir=$(TF_MODULE) plan -input=false
+
+tf-apply:
+	terraform -chdir=$(TF_MODULE) apply -input=false
+
+# ---------------------------------------------------------------------------
 # Frontend build / deploy
 # ---------------------------------------------------------------------------
 
@@ -273,8 +317,25 @@ frontend-build:
 	pnpm -C frontend install --frozen-lockfile
 	pnpm -C frontend build
 
+# frontend/firebase.json has to repeat HOSTING_SITE_ID — JSON can't
+# interpolate, and the Firebase CLI takes the site from firebase.json only
+# (no --site flag, no env override). Drift is silent rather than fatal: with
+# no matching "site", the CLI falls back to the project's *default* site and
+# happily publishes there, so the deploy "succeeds" against the wrong
+# hostname. Fail here instead.
+frontend-site-check:
+	@json_site=$$(python3 -c 'import json; print(json.load(open("frontend/firebase.json"))["hosting"]["site"])'); \
+	if [ "$$json_site" != "$(HOSTING_SITE_ID)" ]; then \
+	    echo "frontend/firebase.json site '$$json_site' != HOSTING_SITE_ID '$(HOSTING_SITE_ID)' in config.env"; \
+	    exit 1; \
+	fi
+
 # Publish the built SPA to Firebase Hosting. TF owns the site shape (project
 # enrolment, site, /api/** rewrite to Cloud Run); this just ships content,
 # mirroring the backend-deploy pattern. Requires `firebase login` once.
-frontend-deploy: frontend-build
-	cd frontend && firebase deploy --only hosting
+#
+# --project rather than a .firebaserc default: that file was a second place
+# naming the project, and one the CLI can rewrite behind your back (`firebase
+# use` edits it).
+frontend-deploy: frontend-site-check frontend-build
+	cd frontend && firebase deploy --only hosting --project $(PROJECT_ID)

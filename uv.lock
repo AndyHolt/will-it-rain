@@ -52,6 +52,7 @@ version = "0.1.0"
 source = { editable = "backend" }
 dependencies = [
     { name = "fastapi" },
+    { name = "google-auth" },
     { name = "lightgbm" },
     { name = "niquests" },
     { name = "numpy" },
@@ -68,6 +69,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "google-auth", specifier = ">=2.35.0" },
     { name = "lightgbm", specifier = ">=4.6.0" },
     { name = "niquests", specifier = ">=3.16.0" },
     { name = "numpy", specifier = ">=2.4.0" },
@@ -1861,6 +1863,7 @@ dependencies = [
     { name = "openmeteo-sdk" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "scikit-learn" },
 ]
 
@@ -1874,5 +1877,6 @@ requires-dist = [
     { name = "openmeteo-sdk", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.11.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
 ]

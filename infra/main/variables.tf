@@ -1,13 +1,25 @@
+# ---------------------------------------------------------------------------
+# No defaults for project id, region and hosting site id: these come from
+# config.env at the repo root, enforced as a single source of truth
+# ---------------------------------------------------------------------------
+
 variable "project_id" {
   type        = string
-  description = "GCP project ID."
-  default     = "will-it-rain-496215"
+  description = "GCP project ID. From config.env."
 }
 
 variable "region" {
   type        = string
-  description = "Default region for regional resources."
-  default     = "europe-west2"
+  description = "Default region for regional resources. From config.env."
+}
+
+# Not derived from project_id: the site id is the public hostname
+# (https://<id>.web.app), so tying it to the project would move the URL on
+# every project migration. frontend/firebase.json repeats the value — JSON
+# can't interpolate — and the two must agree.
+variable "hosting_site_id" {
+  type        = string
+  description = "Firebase Hosting site ID; becomes <id>.web.app. From config.env."
 }
 
 # ---------------------------------------------------------------------------
@@ -40,12 +52,6 @@ variable "notification_email" {
 # Override via TF_VAR_<name> in CI to pin per-commit artefacts, etc.
 # ---------------------------------------------------------------------------
 
-variable "pipeline_template_uri" {
-  type        = string
-  description = "GCS URI of the compiled pipeline JSON. Override in CI to pin per-commit."
-  default     = "gs://will-it-rain-496215-model-artefacts/pipelines/will-it-rain.yaml"
-}
-
 variable "training_window_start_date" {
   type        = string
   description = "Earliest date to fetch forecast/observations data from (ISO date)."
@@ -58,8 +64,20 @@ variable "model_display_name" {
   default     = "will-it-rain"
 }
 
+# Defaults to the :latest image in this project's Artifact Registry repo. That
+# can't be written as `default = "${var.region}-…"` — a variable default must be
+# a constant expression — so it's null here and derived in the local below.
 variable "backend_image" {
   type        = string
-  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit."
-  default     = "europe-west2-docker.pkg.dev/will-it-rain-496215/will-it-rain-images/backend:latest"
+  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit; null derives it from project_id and region."
+  default     = null
+}
+
+locals {
+  # coalesce skips null, so an explicit var.backend_image (CI pinning a
+  # per-commit tag) still wins over the derived default.
+  backend_image = coalesce(
+    var.backend_image,
+    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend:latest",
+  )
 }

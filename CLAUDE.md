@@ -2,8 +2,9 @@
 
 `will-it-rain` is a weekly-retrained rainfall classifier for one fixed location
 in Scotland. Vertex AI Pipelines for training + Model Registry, Cloud Run +
-Firebase Hosting for serving. GCP project `will-it-rain-496215`, region
-`europe-west2`.
+Firebase Hosting for serving. Which GCP project and region it deploys to is
+declared in `config.env` at the repo root — read it there rather than
+memorising a value.
 
 uv workspace, single `uv.lock` at root.
 
@@ -22,6 +23,12 @@ Most of the layout reads fine from `ls`. These parts don't:
   model promotion. Its module docstring explains the design; read that rather
   than inferring from the Terraform.
 - **`build/`** holds the compiled pipeline YAML and is gitignored.
+- **`config.env`** is the single declared source for `PROJECT_ID`, `REGION` and
+  `HOSTING_SITE_ID`. Every consumer reads it natively — the Makefile
+  `include`s it, CI loads it via `.github/actions/load-config`, Terraform takes
+  it as `TF_VAR_*`, and build/deploy-time Python gets it through
+  `will_it_rain_shared/gcp.py`. Nothing generates anything. Add a deploy-target
+  value here rather than to a second file.
 
 ## Dev workflow
 
@@ -34,8 +41,14 @@ done; `make fix` applies every auto-fixer. Recipes are split `py-*` /
 Recipes that hit GCP are **deliberately absent from `make help`** so they aren't
 one tab-complete away, but they exist: `image`, `compile-pipeline`,
 `upload-pipeline`, `deploy-pipeline`, `trigger-pipeline-from-local`,
-`trigger-pipeline-via-scheduler`, `clean`, `backend-image`, `backend-deploy`.
-Read the Makefile for the current set.
+`trigger-pipeline-via-scheduler`, `clean`, `backend-image`, `backend-deploy`,
+`frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the Makefile for the
+current set.
+
+Run Terraform through `make tf-plan` / `make tf-apply` rather than
+`terraform -chdir=…` directly: `project_id`, `region` and `hosting_site_id`
+have no defaults, and the recipes are what export them from `config.env`.
+`make tf-apply TF_MODULE=infra/bootstrap` for the bootstrap module.
 
 ## Gotchas
 
@@ -54,11 +67,27 @@ Read the Makefile for the current set.
   image build.
 - **Private location config** lives in gitignored `.env`; `.env-example`
   documents the keys (`LATITUDE`, `LONGITUDE`, `COSMOS_UK_SITE_CODE`). Follow
-  that layout for new env-driven config.
+  that layout for new env-driven config. Don't confuse it with `config.env`,
+  which is committed: `.env` is for what must stay out of version control,
+  `config.env` for what must be *in* it.
+- **Serving code must not import `will_it_rain_shared/gcp.py`.** It has no
+  defaults, so it raises without `PROJECT_ID` in the environment — which is
+  what keeps it build- and deploy-time only. Cloud Run has no reason to set
+  `PROJECT_ID`: the backend resolves its project from ADC
+  (`google.auth.default()`), which works on Cloud Run, on Vertex and locally.
+  Region is the exception — ADC carries no location, so `LOCATION` stays
+  injected by `cloud_run.tf`.
+- **`frontend/firebase.json` repeats `HOSTING_SITE_ID`** because JSON can't
+  interpolate and the Firebase CLI reads the site from that file only (no
+  `--site` flag, no env override). Drift is *silent*: with no matching `site`,
+  the CLI resolves the project's default site and publishes there instead of
+  failing. `make frontend-site-check` guards it, and runs in CI and before
+  `frontend-deploy`. The hardcoded `"region"` in the same file is the same
+  problem, currently inert.
 
 ## Further reading
 
 - [docs/deployment.md](docs/deployment.md) — pipeline trigger, backend and
   frontend deploy procedures
 - [docs/cicd.md](docs/cicd.md) — workflows, `deploy.yml` job graph, WIF auth,
-  required GitHub secrets.
+  how `config.env` reaches CI, required GitHub secrets.

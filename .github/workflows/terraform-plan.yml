@@ -13,6 +13,8 @@ on:
   pull_request:
     paths:
       - 'infra/main/**'
+      - 'config.env'
+      - '.github/actions/load-config/**'
       - '.github/workflows/terraform-plan.yml'
 
 permissions:
@@ -30,6 +32,9 @@ jobs:
       TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
     steps:
       - uses: actions/checkout@v4
+      # project_id / region / hosting_site_id have no defaults in the module;
+      # they come from config.env, as TF_VAR_*.
+      - uses: ./.github/actions/load-config
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/597101211776/locations/global/workloadIdentityPools/github-actions/providers/github

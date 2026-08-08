@@ -11,12 +11,18 @@ resource "google_firebase_project" "this" {
   depends_on = [google_project_service.main]
 }
 
-# Default site shares the project ID. One site is enough for v1; if we ever
-# need preview channels with custom hostnames we'd add more sites here.
+# One site is enough for v1; if we ever need preview channels with custom
+# hostnames we'd add more sites here.
+#
+# The site id is deliberately independent of the project id — it's the public
+# hostname, and pinning it to the project would move the URL on every project
+# migration. It must match "site" in frontend/firebase.json: without that key
+# the CLI resolves the project's *default* site, so a mismatch doesn't error,
+# it silently publishes to a different site.
 resource "google_firebase_hosting_site" "default" {
   provider = google-beta
 
-  site_id = var.project_id
+  site_id = var.hosting_site_id
 
   depends_on = [google_firebase_project.this]
 }

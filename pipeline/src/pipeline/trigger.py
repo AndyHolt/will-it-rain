@@ -6,9 +6,10 @@ SDK rather than a raw HTTP call to pipelineJobs.create because the SDK
 correctly inlines the compiled KFP 2.x spec; Vertex's own templateUri code
 path mis-parses it.
 
-Run from the repo root after ``make compile-pipeline``:
-
-    uv run --package pipeline python -m pipeline.trigger
+Run from the repo root via ``make trigger-pipeline-from-local``, which exports
+the config.env values this module's ``will_it_rain_shared.gcp`` import needs.
+Submitting a training run to whichever project gcloud happens to point at is
+not a useful default, so the project is declared rather than discovered.
 
 Private location/site values come from .env (see .env-example). Auth uses
 your local ADC; the submitted job runs as the `pipeline` SA, so ADC needs
@@ -18,6 +19,13 @@ your local ADC; the submitted job runs as the `pipeline` SA, so ADC needs
 from google.cloud import aiplatform
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from will_it_rain_shared.gcp import (
+    ARTEFACTS_BUCKET,
+    PIPELINE_SERVICE_ACCOUNT,
+    PROJECT_ID,
+    REGION,
+)
 
 
 class Settings(BaseSettings):
@@ -33,10 +41,6 @@ class Settings(BaseSettings):
     LONGITUDE: float = Field(...)
     COSMOS_UK_SITE_CODE: str = Field(...)
 
-    PROJECT: str = "will-it-rain-496215"
-    LOCATION: str = "europe-west2"
-    ARTEFACTS_BUCKET: str = "will-it-rain-496215-model-artefacts"
-    PIPELINE_SA: str = "pipeline@will-it-rain-496215.iam.gserviceaccount.com"
     PIPELINE_TEMPLATE: str = "build/pipeline.yaml"
     TRAINING_WINDOW_START_DATE: str = "2022-03-01"
     MODEL_DISPLAY_NAME: str = "will-it-rain"
@@ -46,25 +50,25 @@ class Settings(BaseSettings):
 
 def main() -> None:
     s = Settings()
-    aiplatform.init(project=s.PROJECT, location=s.LOCATION)
+    aiplatform.init(project=PROJECT_ID, location=REGION)
 
     job = aiplatform.PipelineJob(
         display_name="will-it-rain-train",
         template_path=s.PIPELINE_TEMPLATE,
-        pipeline_root=f"gs://{s.ARTEFACTS_BUCKET}/pipeline-runs",
+        pipeline_root=f"gs://{ARTEFACTS_BUCKET}/pipeline-runs",
         parameter_values={
             "latitude": s.LATITUDE,
             "longitude": s.LONGITUDE,
             "site_code": s.COSMOS_UK_SITE_CODE,
             "training_window_start_date": s.TRAINING_WINDOW_START_DATE,
-            "project": s.PROJECT,
-            "location": s.LOCATION,
-            "artefacts_bucket": s.ARTEFACTS_BUCKET,
+            "project": PROJECT_ID,
+            "location": REGION,
+            "artefacts_bucket": ARTEFACTS_BUCKET,
             "model_display_name": s.MODEL_DISPLAY_NAME,
         },
         enable_caching=False,
     )
-    job.submit(service_account=s.PIPELINE_SA)
+    job.submit(service_account=PIPELINE_SERVICE_ACCOUNT)
     print(f"Submitted: {job.resource_name}")
 
 

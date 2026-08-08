@@ -1,0 +1,26 @@
+name: Load config.env
+description: >
+  Read config.env into the job environment, under both its own names and the
+  TF_VAR_ names Terraform expects. Requires actions/checkout to have run.
+  Locally the Makefile does the same job with `include` + `export`.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        # config.env is KEY=value plus comments. GITHUB_ENV only accepts
+        # assignment lines — a bare comment line makes the runner reject the
+        # whole file — so filter rather than cat. Anything added to config.env
+        # flows through without touching this action.
+        grep -E '^[A-Za-z_][A-Za-z0-9_]*=' config.env >> "$GITHUB_ENV"
+
+        # Terraform reads its inputs from lowercase TF_VAR_-prefixed names, so
+        # map the pair that Terraform spells differently. Same mapping the
+        # Makefile does for local runs.
+        . ./config.env
+        {
+          echo "TF_VAR_project_id=$PROJECT_ID"
+          echo "TF_VAR_region=$REGION"
+          echo "TF_VAR_hosting_site_id=$HOSTING_SITE_ID"
+        } >> "$GITHUB_ENV"

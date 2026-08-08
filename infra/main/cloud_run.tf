@@ -19,7 +19,7 @@ resource "google_cloud_run_v2_service" "backend" {
     }
 
     containers {
-      image = var.backend_image
+      image = local.backend_image
 
       ports {
         container_port = 8080
