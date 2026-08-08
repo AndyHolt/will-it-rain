@@ -333,5 +333,9 @@ frontend-site-check:
 # Publish the built SPA to Firebase Hosting. TF owns the site shape (project
 # enrolment, site, /api/** rewrite to Cloud Run); this just ships content,
 # mirroring the backend-deploy pattern. Requires `firebase login` once.
+#
+# --project rather than a .firebaserc default: that file was a second place
+# naming the project, and one the CLI can rewrite behind your back (`firebase
+# use` edits it).
 frontend-deploy: frontend-site-check frontend-build
-	cd frontend && firebase deploy --only hosting
+	cd frontend && firebase deploy --only hosting --project $(PROJECT_ID)

@@ -255,11 +255,16 @@ jobs:
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      # firebase.json repeats HOSTING_SITE_ID and drift is silent — the CLI
+      # would publish to the project's default site instead. Same guard
+      # `make frontend-deploy` runs locally.
+      - name: Check firebase.json site matches config.env
+        run: make frontend-site-check
       - name: Build SPA
         run: make frontend-build
       # firebase-tools picks up GOOGLE_APPLICATION_CREDENTIALS set by
-      # google-github-actions/auth. --project pinned for non-interactive use
-      # even though .firebaserc already defaults to it.
+      # google-github-actions/auth. --project comes from config.env; there's
+      # no .firebaserc to default from, deliberately.
       - name: Deploy to Firebase Hosting
         working-directory: frontend
         run: npx -y firebase-tools@latest deploy --only hosting --non-interactive --project ${{ env.PROJECT_ID }}
