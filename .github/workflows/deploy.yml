@@ -17,9 +17,11 @@ permissions:
   id-token: write # WIF token exchange
   contents: read
 
+# PROJECT_ID / REGION / HOSTING_SITE_ID are not declared here — they come from
+# config.env, loaded per-job by ./.github/actions/load-config (workflow-level
+# env can't be populated from a step). The WIF values stay literal: the
+# provider path embeds the project *number*, which config.env doesn't carry.
 env:
-  PROJECT_ID: will-it-rain-496215
-  REGION: europe-west2
   WIF_PROVIDER: projects/597101211776/locations/global/workloadIdentityPools/github-actions/providers/github
   WIF_SERVICE_ACCOUNT: terraform@will-it-rain-496215.iam.gserviceaccount.com
 
@@ -42,6 +44,10 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # config.env is in every filter: it names the project everything
+          # deploys to, so a change to it invalidates every artefact — images
+          # land in a different registry, buckets and the Cloud Run service
+          # move. Without it a project change would merge as a no-op.
           filters: |
             pipeline:
               - 'pipeline/**'
@@ -49,19 +55,24 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'Makefile'
+              - 'config.env'
             backend:
               - 'backend/**'
               - 'will_it_rain_shared/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - 'Makefile'
+              - 'config.env'
             frontend:
               - 'frontend/**'
+              - 'config.env'
             infra:
               - 'infra/main/**'
+              - 'config.env'
             model_refresher:
               - 'model_refresher/**'
               - 'Makefile'
+              - 'config.env'
 
   # ---------------------------------------------------------------------------
   # Build + push container images. Both jobs are independent; either or both
@@ -73,6 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -90,6 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -179,6 +192,9 @@ jobs:
       TF_VAR_notification_email: ${{ secrets.NOTIFICATION_EMAIL }}
     steps:
       - uses: actions/checkout@v4
+      # project_id / region / hosting_site_id have no defaults in the module;
+      # they come from config.env, as TF_VAR_*.
+      - uses: ./.github/actions/load-config
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -203,6 +219,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -227,6 +244,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
       - uses: actions/setup-node@v6
         with:
           node-version: 26
