@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "will-it-rain-496215",
+    "site": "will-it-rain",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
