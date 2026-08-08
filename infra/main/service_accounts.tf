@@ -32,6 +32,17 @@ resource "google_storage_bucket_iam_member" "pipeline_artefacts_admin" {
   member = "serviceAccount:${google_service_account.pipeline.email}"
 }
 
+# Vertex worker containers ship their stdout/stderr to Cloud Logging as the
+# job's SA, not as the Vertex service agent. Without this, a failing component
+# is undebuggable: the agent's own "Job is running" / "exited with a non-zero
+# status" messages still land, so the logs *look* present, but every line the
+# component printed — including the traceback — is dropped silently.
+resource "google_project_iam_member" "pipeline_log_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.pipeline.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Run backend SA
 # ---------------------------------------------------------------------------
