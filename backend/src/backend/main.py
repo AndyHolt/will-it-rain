@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
+import google.auth
 from fastapi import Depends, FastAPI, HTTPException
+from google.auth.exceptions import DefaultCredentialsError
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,13 +30,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _project_from_adc() -> str:
+    """Resolve the GCP project from Application Default Credentials.
+
+    Used if PROJECT environment variable (which is injected by terraform) is not
+    set, for local dev or as fallback in cloud run.
+    """
+    try:
+        _, project = google.auth.default()
+    except DefaultCredentialsError as exc:
+        raise RuntimeError(
+            "No Application Default Credentials, so the GCP project could not "
+            "be resolved. Run `gcloud auth application-default login`, or set "
+            "PROJECT explicitly."
+        ) from exc
+    if not project:
+        raise RuntimeError(
+            "Application Default Credentials carry no project. Set PROJECT "
+            "explicitly, or re-authenticate against a project."
+        )
+    return project
+
+
 class Settings(BaseSettings):
     # See pipeline/trigger.py for why required fields use `Field(...)`.
     LATITUDE: float = Field(...)
     LONGITUDE: float = Field(...)
 
-    PROJECT: str = "will-it-rain-496215"
-    LOCATION: str = "europe-west2"
+    # ADC carries a project but never a location, so LOCATION has to be
+    # injected — it's a deployment choice, not a discoverable property.
+    PROJECT: str = Field(default_factory=_project_from_adc)
+    LOCATION: str = Field(...)
     MODEL_DISPLAY_NAME: str = "will-it-rain"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
