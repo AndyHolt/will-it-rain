@@ -34,3 +34,12 @@ being isolated in a separate account.
 * TODO improve monitoring and alerting for pipeline runs
 * TODO consider impact of using colima instead of docker desktop for dev container runtime
 * TODO Model version in frontend to display training date, not just a version number
+* TODO check billing alerts correctly configured
+* TODO add descriptive names to pipeline components
+* TODO improve model
+* TODO add additional evaluation metrics and indicators
+* TODO ensure proper logging in pipeline components
+* TODO fix backoff strategy for pipeline data fetching
+currently backoff strategy is too short. Give longer waits to ensure rate
+limiting isn't encountered. Since pipeline runs offline, waiting a few tens of
+seconds, or even minutes, is perfectly reasonable.
