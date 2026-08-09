@@ -40,11 +40,20 @@ def will_it_rain_pipeline(
     # would otherwise short-circuit to stale snapshots on every re-run.
     # Downstream tasks keep caching on — they'll cache-miss naturally when
     # the fresh fetch outputs differ.
-    fetch_forecast = fetch_forecast_op(
-        latitude=latitude,
-        longitude=longitude,
-        start_date=training_window_start_date,
-    ).set_caching_options(False)
+    # The forecast fetch also retries at the task level, on top of the HTTP
+    # retries inside the component. That covers what the in-process retries
+    # can't — a lost worker, or Open-Meteo being down for longer than one
+    # component's patience. One extra attempt only: past that the failure is
+    # real, and a weekly job gains nothing from failing more slowly.
+    fetch_forecast = (
+        fetch_forecast_op(
+            latitude=latitude,
+            longitude=longitude,
+            start_date=training_window_start_date,
+        )
+        .set_caching_options(False)
+        .set_retry(num_retries=1, backoff_duration="120s")
+    )
     fetch_observations = fetch_observations_op(
         site_code=site_code,
         start_date=training_window_start_date,
