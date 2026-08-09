@@ -1,5 +1,6 @@
 """Train a LightGBM classifier with isotonic calibration."""
 
+import json
 from pathlib import Path
 
 import joblib
@@ -9,9 +10,14 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.metrics import f1_score
 
 from pipeline.components.prepare import PreparedData
-from will_it_rain_shared.predict import TrainedModel
+from will_it_rain_shared.predict import PREDICTION_WINDOW_HOURS, TrainedModel
 
 RANDOM_SEED = 42
+
+# Filenames of the serving contract, read by name (no listing) at serve time.
+# Named here rather than at the call sites so train and register can't drift.
+SERVING_MODEL_FILENAME = "model.txt"
+SERVING_METADATA_FILENAME = "serving.json"
 
 
 def train(
@@ -73,3 +79,37 @@ def train(
 def save_bundle(trained_model: TrainedModel, path: str | Path) -> None:
     """Serialise a TrainedModel to a joblib file at ``path``."""
     joblib.dump(trained_model.model_dump(), path)
+
+
+def save_serving_artefacts(trained_model: TrainedModel, directory: str | Path) -> None:
+    """Emit the language-neutral serving contract: native model + metadata.
+
+    The joblib bundle written by ``save_bundle`` is only readable from Python,
+    which ties serving to this interpreter. These two files carry the same
+    information in formats any runtime can read: LightGBM's own text format,
+    and the calibrator, threshold and feature metadata as JSON. Both are
+    derived from the same ``TrainedModel``, so neither can drift from the
+    bundle that champion evaluation uses.
+
+    The isotonic calibrator is reduced to its knots (``X_thresholds_`` /
+    ``y_thresholds_``); evaluating it is linear interpolation between them,
+    clamped at both ends to match ``out_of_bounds="clip"``.
+    """
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    trained_model.model.booster_.save_model(str(directory / SERVING_MODEL_FILENAME))
+
+    calibrator = trained_model.calibrator
+    metadata = {
+        "feature_cols": list(trained_model.feature_cols),
+        "lag_hours": [int(h) for h in trained_model.lag_hours],
+        "sparse_columns": list(trained_model.sparse_columns),
+        "threshold": float(trained_model.threshold),
+        "prediction_window_hours": PREDICTION_WINDOW_HOURS,
+        "isotonic": {
+            "x": [float(v) for v in calibrator.X_thresholds_],
+            "y": [float(v) for v in calibrator.y_thresholds_],
+        },
+    }
+    (directory / SERVING_METADATA_FILENAME).write_text(json.dumps(metadata, indent=2) + "\n")

@@ -83,6 +83,7 @@ def will_it_rain_pipeline(
     with dsl.If(evaluate.outputs["Output"] == True, name="register-and-promote"):  # noqa: E712
         register = register_op(
             bundle=train.outputs["bundle"],
+            serving=train.outputs["serving"],
             evaluation=evaluate.outputs["evaluation"],
             project=project,
             location=location,

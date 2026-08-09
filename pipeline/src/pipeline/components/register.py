@@ -6,6 +6,7 @@ from pathlib import Path
 from google.cloud import aiplatform, storage
 
 from pipeline.components.evaluate import EvaluationResult
+from pipeline.components.train import SERVING_METADATA_FILENAME, SERVING_MODEL_FILENAME
 
 DEFAULT_MODEL_DISPLAY_NAME = "will-it-rain"
 
@@ -43,6 +44,7 @@ def _resolve_parent_model(model_display_name: str, project: str, location: str) 
 
 def register(
     bundle_path: str | Path,
+    serving_dir: str | Path,
     evaluation: EvaluationResult,
     *,
     project: str,
@@ -66,13 +68,23 @@ def register(
     # artifact has no extension (`bundle`), so we rename on upload — the bundle
     # is a joblib dump, hence `.joblib`.
     bundle_path = Path(bundle_path)
+    serving_dir = Path(serving_dir)
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    blob_path = f"models/{timestamp}/model.joblib"
-    artifact_uri = f"gs://{artefacts_bucket}/models/{timestamp}"
+    prefix = f"models/{timestamp}"
+    artifact_uri = f"gs://{artefacts_bucket}/{prefix}"
 
-    storage.Client(project=project).bucket(artefacts_bucket).blob(blob_path).upload_from_filename(
-        str(bundle_path)
-    )
+    # The serving artefacts go in the same prefix as the bundle, because that
+    # prefix *is* the Vertex `artifact_uri` — so resolving @production yields
+    # the location of both. The sklearn container tolerates the extra files:
+    # it looks for `model.joblib` by name, and we never serve from it anyway.
+    bucket = storage.Client(project=project).bucket(artefacts_bucket)
+    uploads = {
+        f"{prefix}/model.joblib": bundle_path,
+        f"{prefix}/{SERVING_MODEL_FILENAME}": serving_dir / SERVING_MODEL_FILENAME,
+        f"{prefix}/{SERVING_METADATA_FILENAME}": serving_dir / SERVING_METADATA_FILENAME,
+    }
+    for blob_path, source in uploads.items():
+        bucket.blob(blob_path).upload_from_filename(str(source))
 
     parent_model = _resolve_parent_model(model_display_name, project, location)
     return aiplatform.Model.upload(
