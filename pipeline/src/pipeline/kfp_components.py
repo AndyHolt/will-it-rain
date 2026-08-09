@@ -75,14 +75,18 @@ def prepare_op(
 def train_op(
     prepared: Input[Artifact],
     bundle: Output[Model],
+    serving: Output[Artifact],
 ) -> None:
     import joblib
 
-    from pipeline.components.train import save_bundle, train
+    from pipeline.components.train import save_bundle, save_serving_artefacts, train
 
     prepared_data = joblib.load(prepared.path)
     trained = train(prepared_data)
     save_bundle(trained, bundle.path)
+    # `serving.path` is a directory here, not a file — save_serving_artefacts
+    # writes model.txt and serving.json into it.
+    save_serving_artefacts(trained, serving.path)
 
 
 @dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
@@ -132,6 +136,7 @@ def evaluate_op(
 @dsl.component(base_image=PIPELINE_IMAGE, install_kfp_package=False)
 def register_op(
     bundle: Input[Model],
+    serving: Input[Artifact],
     evaluation: Input[Artifact],
     project: str,
     location: str,
@@ -145,6 +150,7 @@ def register_op(
     evaluation_obj = joblib.load(evaluation.path)
     model = register(
         bundle_path=bundle.path,
+        serving_dir=serving.path,
         evaluation=evaluation_obj,
         project=project,
         location=location,
