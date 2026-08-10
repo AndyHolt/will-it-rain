@@ -103,19 +103,26 @@ resource "google_project_iam_member" "terraform_sa" {
   member  = "serviceAccount:${google_service_account.terraform.email}"
 }
 
-# Billing-account-level read access for the SA. `google_billing_budget` in
-# infra/main/ needs `billing.budgets.get` to refresh, which lives on the
-# billing account, not the project — so it can't be a project IAM binding.
-# Whoever applies bootstrap needs billing-account admin to grant this.
+# Billing-account-level access for the SA. `google_billing_budget` in
+# infra/main/ lives on the billing account, not the project, so this can't be a
+# project IAM binding. Whoever applies bootstrap needs billing-account admin.
+#
+# `costsManager` rather than `viewer`: viewer grants `billing.budgets.get`,
+# enough to refresh the budget but not to update it. That gap is invisible
+# until the budget drifts from billing.tf — CI then plans a change it has no
+# permission to apply and the apply job fails on a resource nobody touched.
+# costsManager is a superset of viewer for everything Terraform uses here
+# (`billing.accounts.get`, `billing.budgets.get`/`list`) plus the missing
+# `billing.budgets.update`, and grants no spending or payment-info access.
 data "google_project" "this" {
   project_id = var.project_id
 
   depends_on = [google_project_service.bootstrap]
 }
 
-resource "google_billing_account_iam_member" "tf_billing_viewer" {
+resource "google_billing_account_iam_member" "tf_billing_costs_manager" {
   billing_account_id = data.google_project.this.billing_account
-  role               = "roles/billing.viewer"
+  role               = "roles/billing.costsManager"
   member             = "serviceAccount:${google_service_account.terraform.email}"
 }
 
