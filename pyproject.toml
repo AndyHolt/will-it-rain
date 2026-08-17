@@ -12,6 +12,7 @@ members = [
     "pipeline",
     "backend",
     "model_refresher",
+    "golden_fixtures",
 ]
 
 [dependency-groups]

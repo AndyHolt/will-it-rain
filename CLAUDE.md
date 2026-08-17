@@ -43,7 +43,8 @@ one tab-complete away, but they exist: `image`, `compile-pipeline`,
 `upload-pipeline`, `deploy-pipeline`, `trigger-pipeline-from-local`,
 `trigger-pipeline-via-scheduler`, `clean`, `backend-image`, `backend-deploy`,
 `frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the Makefile for the
-current set.
+current set. `golden-fixtures` is hidden for a different reason — it needs no
+GCP, but it retrains a model and rewrites checked-in fixtures.
 
 Run Terraform through `make tf-plan` / `make tf-apply` rather than
 `terraform -chdir=…` directly: `project_id`, `region` and `hosting_site_id`
