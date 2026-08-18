@@ -372,6 +372,8 @@ version = "0.1.0"
 source = { editable = "golden_fixtures" }
 dependencies = [
     { name = "niquests" },
+    { name = "openmeteo-sdk" },
+    { name = "pandas" },
     { name = "pipeline" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -381,6 +383,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "niquests", specifier = ">=3.16.0" },
+    { name = "openmeteo-sdk", specifier = ">=1.26.0" },
+    { name = "pandas", specifier = ">=3.0.0" },
     { name = "pipeline", editable = "pipeline" },
     { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pydantic-settings", specifier = ">=2.14.0" },

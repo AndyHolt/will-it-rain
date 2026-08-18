@@ -5,6 +5,8 @@ description = "Generate the cross-language fixtures the Go backend is tested aga
 requires-python = ">=3.14"
 dependencies = [
     "niquests>=3.16.0",
+    "openmeteo-sdk>=1.26.0",
+    "pandas>=3.0.0",
     "pipeline",
     "pydantic>=2.11.0",
     "pydantic-settings>=2.14.0",

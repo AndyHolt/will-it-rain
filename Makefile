@@ -290,14 +290,16 @@ clean:
 # ---------------------------------------------------------------------------
 
 # Generate what the Go backend's parity tests assert against: a locally
-# trained model (model.txt, serving.json) and one raw Open-Meteo FlatBuffers
-# response, written to backend-go/testdata and checked in.
+# trained model (model.txt, serving.json), one raw Open-Meteo FlatBuffers
+# response (forecast.fb), and the outputs the Python serving path produces
+# from the two (expected.json), written to backend-go/testdata and checked in.
 #
 # No GCP: the model is trained here over a fixed date window rather than
 # downloaded from the registry, so this needs no credentials and isn't gated
 # on a challenger beating the champion. See golden_fixtures/model.py for the
 # full reasoning. Takes ~20s, mostly the historical fetch; reruns reproduce
-# model.txt and serving.json byte-for-byte.
+# model.txt and serving.json byte-for-byte, while forecast.fb and the
+# expected.json derived from it move with the live forecast.
 #
 # Kept out of `make help` because it rewrites checked-in fixtures — re-run it
 # deliberately, when the serving contract changes.

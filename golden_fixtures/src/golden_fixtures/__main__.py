@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from golden_fixtures import FIXTURE_DIR
 from golden_fixtures.capture import capture_forecast
+from golden_fixtures.expected import write_expected
 from golden_fixtures.model import TRAINING_END, TRAINING_START, train_serving_artefacts
 
 
@@ -32,6 +33,7 @@ def main() -> None:
         s.LATITUDE, s.LONGITUDE, s.COSMOS_UK_SITE_CODE, FIXTURE_DIR
     )
     payload_bytes = capture_forecast(s.LATITUDE, s.LONGITUDE, FIXTURE_DIR)
+    prediction = write_expected(trained_model, FIXTURE_DIR)
 
     # What the fixtures actually contain is the first thing you want when a
     # parity test starts failing, and nothing else records it yet.
@@ -45,6 +47,11 @@ def main() -> None:
         f"sparse {trained_model.sparse_columns}"
     )
     print(f"  forecast.fb    {payload_bytes} bytes")
+    print(
+        f"  expected.json  anchor {prediction.anchor_utc:%Y-%m-%dT%H:%MZ}, "
+        f"calibrated {prediction.calibrated_prob:.4f}, "
+        f"will_rain {prediction.will_rain}"
+    )
 
 
 if __name__ == "__main__":
