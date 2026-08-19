@@ -68,6 +68,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	py-lint-fix py-format py-fix \
 	frontend-lint frontend-format-check frontend-typecheck frontend-check \
 	frontend-lint-fix frontend-format frontend-fix \
+	go-format-check go-vet go-test go-check go-format go-fix \
 	check fix prek \
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline \
@@ -84,7 +85,8 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 #
 # Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, backend,
 # shared library. Frontend tooling (biome, tsc) covers the TypeScript workspace
-# under frontend/. `check` and `fix` aggregate both.
+# under frontend/. Go tooling (gofmt, vet, go test) covers the module under
+# backend-go/. `check` and `fix` aggregate all three.
 
 # Print available targets (anything whose recipe line carries a `## doc`).
 help:
@@ -140,10 +142,37 @@ frontend-format: ## biome format --write
 frontend-fix: ## biome check --write (lint + format)
 	pnpm -C frontend check:fix
 
-# Aggregators across both toolchains. Default for "did I break anything?".
-check: py-check frontend-check ## all read-only checks (CI parity, both stacks)
+# Go — read-only checks over the backend-go module. `go -C` keeps these
+# runnable from the repo root, the same way `pnpm -C` does for the frontend.
+#
+# golangci-lint is deliberately absent: it is wired into the prek hooks and
+# has its own CI job, and unlike ruff (which uv pins in the workspace) it is
+# an unmanaged binary that `make check` would then require everyone to have
+# installed. `make prek` is the recipe that runs it.
+go-format-check: ## gofmt -s -l, no writes
+	@unformatted=$$(gofmt -s -l backend-go); \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt -s needed:"; echo "$$unformatted"; exit 1; \
+	fi
 
-fix: py-fix frontend-fix ## all auto-fixers (both stacks)
+go-vet: ## go vet (suspicious constructs)
+	go -C backend-go vet ./...
+
+go-test: ## go test across the module
+	go -C backend-go test ./...
+
+go-check: go-format-check go-vet go-test ## all Go read-only checks
+
+# Go — auto-fixers (mutate the working tree). Matches the prek gofmt hook.
+go-format: ## gofmt -s (writes)
+	gofmt -s -w backend-go
+
+go-fix: go-format ## all Go auto-fixers
+
+# Aggregators across every toolchain. Default for "did I break anything?".
+check: py-check frontend-check go-check ## all read-only checks (CI parity, all stacks)
+
+fix: py-fix frontend-fix go-fix ## all auto-fixers (all stacks)
 
 # Run the full prek hook set against every file. Matches what pre-commit
 # enforces locally and what the prek hook job runs in CI.
