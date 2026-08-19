@@ -1,0 +1,31 @@
+name: go
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend-go/**'
+      - 'Makefile'
+      - '.github/workflows/go.yml'
+  pull_request:
+    paths:
+      - 'backend-go/**'
+      - 'Makefile'
+      - '.github/workflows/go.yml'
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: backend-go/go.mod
+          cache-dependency-path: backend-go/go.sum
+
+      # Via make rather than `go test` directly, so the flags CI runs stay the
+      # ones `make go-test` runs locally.
+      - name: Run tests
+        run: make go-test
