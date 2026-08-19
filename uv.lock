@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "backend",
+    "golden-fixtures",
     "model-refresher",
     "pipeline",
     "will-it-rain",
@@ -363,6 +364,31 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8b/4e/63875081ead5db522d33d05fcc5bafad73944da841755ef8a1dc5d872b80/functions_framework-3.10.1.tar.gz", hash = "sha256:e60174022fc1b293dd0a33f1c6894dabd44852c0d440a51e7defd198e8d05ca5", size = 54148, upload-time = "2026-02-17T20:39:43.308Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/0e/f2cbbd4eb81646b3e09093b4df903c4df60c4791f2a4c6d41e5f3a56b491/functions_framework-3.10.1-py3-none-any.whl", hash = "sha256:48e7fd752d32dfeb528d1c9bf5d95960b6f0bb392f2a4da689f4d3c7a82c1230", size = 41406, upload-time = "2026-02-17T20:39:41.455Z" },
+]
+
+[[package]]
+name = "golden-fixtures"
+version = "0.1.0"
+source = { editable = "golden_fixtures" }
+dependencies = [
+    { name = "niquests" },
+    { name = "openmeteo-sdk" },
+    { name = "pandas" },
+    { name = "pipeline" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "will-it-rain-shared" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "niquests", specifier = ">=3.16.0" },
+    { name = "openmeteo-sdk", specifier = ">=1.26.0" },
+    { name = "pandas", specifier = ">=3.0.0" },
+    { name = "pipeline", editable = "pipeline" },
+    { name = "pydantic", specifier = ">=2.11.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.0" },
+    { name = "will-it-rain-shared", editable = "will_it_rain_shared" },
 ]
 
 [[package]]
