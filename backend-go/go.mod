@@ -1,0 +1,5 @@
+module github.com/AndyHolt/will-it-rain/backend-go
+
+go 1.26
+
+require github.com/google/flatbuffers v25.12.19+incompatible
