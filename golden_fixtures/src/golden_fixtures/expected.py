@@ -45,8 +45,9 @@ _SIZE_PREFIX_BYTES = 4
 
 # Timestamps go out in the shape Go's time.RFC3339 parses, with a literal Z
 # rather than pandas' "+00:00", so the fixture reads the same in both
-# languages.
-_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+# languages. Public, with the helpers below, because the constructed fixture
+# in `edge_cases` has to serialise to exactly the same conventions.
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def read_forecast(directory: Path) -> pd.DataFrame:
@@ -116,7 +117,7 @@ def pick_fixture_anchor(forecast: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timest
     return now_utc, candidates.max()
 
 
-def _nullable(value: float) -> float | None:
+def nullable(value: float) -> float | None:
     """Render NaN as JSON null; anything else as a plain float."""
     number = float(value)
     if math.isnan(number):
@@ -124,6 +125,14 @@ def _nullable(value: float) -> float | None:
     if math.isinf(number):
         raise ValueError("Infinite value in fixture data — expected floats or NaN.")
     return number
+
+
+def serialise_forecast(forecast: pd.DataFrame) -> dict[str, object]:
+    """Render a forecast frame as the canonical column map the Go tests read."""
+    return {
+        "times_utc": [t.strftime(TIMESTAMP_FORMAT) for t in forecast.index],
+        "columns": {str(name): [nullable(v) for v in values] for name, values in forecast.items()},
+    }
 
 
 def write_expected(trained_model: TrainedModel, directory: Path) -> Prediction:
@@ -146,19 +155,14 @@ def write_expected(trained_model: TrainedModel, directory: Path) -> Prediction:
     row = features.loc[anchor_utc, trained_model.feature_cols]
 
     expected = {
-        "forecast": {
-            "times_utc": [t.strftime(_TIMESTAMP_FORMAT) for t in forecast.index],
-            "columns": {
-                str(name): [_nullable(v) for v in values] for name, values in forecast.items()
-            },
-        },
-        "now_utc": now_utc.strftime(_TIMESTAMP_FORMAT),
-        "anchor_utc": anchor_utc.strftime(_TIMESTAMP_FORMAT),
+        "forecast": serialise_forecast(forecast),
+        "now_utc": now_utc.strftime(TIMESTAMP_FORMAT),
+        "anchor_utc": anchor_utc.strftime(TIMESTAMP_FORMAT),
         "window_end_utc": (anchor_utc + pd.Timedelta(hours=PREDICTION_WINDOW_HOURS)).strftime(
-            _TIMESTAMP_FORMAT
+            TIMESTAMP_FORMAT
         ),
         "feature_cols": list(trained_model.feature_cols),
-        "feature_vector": [_nullable(v) for v in row],
+        "feature_vector": [nullable(v) for v in row],
         "raw_prob": prediction.raw_prob,
         "calibrated_prob": prediction.calibrated_prob,
         "threshold": prediction.threshold,

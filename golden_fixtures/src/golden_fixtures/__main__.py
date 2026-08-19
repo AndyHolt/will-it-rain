@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from golden_fixtures import FIXTURE_DIR
 from golden_fixtures.capture import capture_forecast
+from golden_fixtures.edge_cases import write_edge_cases
 from golden_fixtures.expected import write_expected
 from golden_fixtures.model import TRAINING_END, TRAINING_START, train_serving_artefacts
 
@@ -34,23 +35,28 @@ def main() -> None:
     )
     payload_bytes = capture_forecast(s.LATITUDE, s.LONGITUDE, FIXTURE_DIR)
     prediction = write_expected(trained_model, FIXTURE_DIR)
+    prediction_cases, calibration_cases = write_edge_cases(trained_model, FIXTURE_DIR)
 
     # What the fixtures actually contain is the first thing you want when a
     # parity test starts failing, and nothing else records it yet.
     print(f"Wrote fixtures to {FIXTURE_DIR}:")
     print(
-        f"  model.txt      {trained_model.model.booster_.num_trees()} trees, "
+        f"  model.txt       {trained_model.model.booster_.num_trees()} trees, "
         f"{len(trained_model.feature_cols)} features"
     )
     print(
-        f"  serving.json   threshold {trained_model.threshold:.3f}, "
+        f"  serving.json    threshold {trained_model.threshold:.3f}, "
         f"sparse {trained_model.sparse_columns}"
     )
-    print(f"  forecast.fb    {payload_bytes} bytes")
+    print(f"  forecast.fb     {payload_bytes} bytes")
     print(
-        f"  expected.json  anchor {prediction.anchor_utc:%Y-%m-%dT%H:%MZ}, "
+        f"  expected.json   anchor {prediction.anchor_utc:%Y-%m-%dT%H:%MZ}, "
         f"calibrated {prediction.calibrated_prob:.4f}, "
         f"will_rain {prediction.will_rain}"
+    )
+    print(
+        f"  edge_cases.json {prediction_cases} constructed predictions, "
+        f"{calibration_cases} calibration probes"
     )
 
 
