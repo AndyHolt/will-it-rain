@@ -1,5 +1,3 @@
-// Authenticate using Application Default Credentials for fetching champion
-// model (tagged with @production).
 package registry
 
 import (
