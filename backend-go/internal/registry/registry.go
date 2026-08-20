@@ -2,10 +2,8 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,14 +16,13 @@ const (
 	defaultModelDisplayName = "will-it-rain"
 	defaultProductionAlias  = "production"
 
+	// GCS is not regional in its endpoint: one host serves every bucket, and
+	// which bucket comes from the registry rather than from configuration.
+	storageBaseURL = "https://storage.googleapis.com/storage/v1"
+
 	// Backstop only — callers pass a context whose deadline is the real
 	// budget. Without it a hung connection would hang startup indefinitely.
 	requestTimeout = 20 * time.Second
-
-	// How much of a failed response body to quote back in the error. Vertex
-	// error payloads are small, but a proxy or auth failure can return an
-	// arbitrarily large HTML page.
-	errorBodyLimit = 2048
 )
 
 // ErrNoProductionModel reports that the registry holds no version aliased
@@ -41,9 +38,10 @@ var ErrNoProductionModel = errors.New("no @production model")
 // deliberately absent: ResolveCredentials answers it from the environment the
 // service is running in.
 type Config struct {
-	// Location is the Vertex region, e.g. "europe-west2". Required — ADC
-	// carries a project but never a location, so it cannot be discovered.
-	Location string
+	// Region is the Vertex region, e.g. "europe-west2", populated from the
+	// LOCATION env var that cloud_run.tf injects. Required — ADC carries a
+	// project but never a region, so it cannot be discovered.
+	Region string
 
 	// ModelDisplayName defaults to "will-it-rain".
 	ModelDisplayName string
@@ -53,8 +51,8 @@ type Config struct {
 }
 
 func (c *Config) applyDefaults() error {
-	if c.Location == "" {
-		return errors.New("registry.Config.Location is required: set LOCATION")
+	if c.Region == "" {
+		return errors.New("registry.Config.Region is required: set LOCATION")
 	}
 	if c.ModelDisplayName == "" {
 		c.ModelDisplayName = defaultModelDisplayName
@@ -71,12 +69,13 @@ type Client struct {
 	project string
 	cfg     Config
 
-	// Overridden in tests. Regional endpoints are required for Vertex: the
-	// global host does not serve model resources.
-	vertexBaseURL string
+	// Both overridden in tests. A regional endpoint is required for Vertex:
+	// the global host does not serve model resources.
+	vertexBaseURL  string
+	storageBaseURL string
 }
 
-// New resolves credentials and returns a Client addressing cfg.Location.
+// New resolves credentials and returns a Client addressing cfg.Region.
 //
 // Config is validated before credentials are touched, so a missing LOCATION
 // fails on its own terms rather than behind an authentication error.
@@ -94,10 +93,11 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	httpClient.Timeout = requestTimeout
 
 	return &Client{
-		http:          httpClient,
-		project:       creds.ProjectID,
-		cfg:           cfg,
-		vertexBaseURL: fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1", cfg.Location),
+		http:           httpClient,
+		project:        creds.ProjectID,
+		cfg:            cfg,
+		vertexBaseURL:  fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1", cfg.Region),
+		storageBaseURL: storageBaseURL,
 	}, nil
 }
 
@@ -129,7 +129,7 @@ func (c *Client) ResolveProduction(ctx context.Context) (ProductionModel, error)
 func (c *Client) parentResource(ctx context.Context) (string, error) {
 	endpoint := fmt.Sprintf(
 		"%s/projects/%s/locations/%s/models?%s",
-		c.vertexBaseURL, c.project, c.cfg.Location,
+		c.vertexBaseURL, c.project, c.cfg.Region,
 		url.Values{"filter": {fmt.Sprintf("display_name=%q", c.cfg.ModelDisplayName)}}.Encode(),
 	)
 
@@ -201,40 +201,4 @@ func (c *Client) aliasedVersion(ctx context.Context, parent string) (ProductionM
 func stripVersion(name string) string {
 	base, _, _ := strings.Cut(name, "@")
 	return base
-}
-
-// statusError is a non-2xx response, carrying enough of the body to tell an
-// auth failure from a missing resource without turning on request logging.
-type statusError struct {
-	code int
-	body string
-}
-
-func (e *statusError) Error() string {
-	return fmt.Sprintf("HTTP %d: %s", e.code, e.body)
-}
-
-func (c *Client) getJSON(ctx context.Context, endpoint string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return fmt.Errorf("building request: %w", err)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	// Not checked: the body is read-only here, so a Close error carries no
-	// information the request itself has not already reported.
-	defer resp.Body.Close() //nolint:errcheck
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit))
-		return &statusError{code: resp.StatusCode, body: strings.TrimSpace(string(body))}
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-	return nil
 }
