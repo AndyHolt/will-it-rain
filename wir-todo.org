@@ -26,6 +26,29 @@ GCS (~make upload-pipeline~) rather than reading from ~build/~ at apply time.
   than starting interpreter and importing packages, but also allows using a much
   more lightweight container which can start up faster. But I suspect this isn't
   the bottleneck!
+* TODO potential further optimisations of go backend cold start
+Skip the model registry's display-name lookup with a MODEL_PARENT_RESOURCE env
+var. Resolving the champion at startup is currently three sequential stages:
+
+1. list models by display name -> parent resource
+2. GET parent@production -> version and artifactUri
+3. fetch model.txt and serving.json from GCS.
+
+The parent resource is fixed for the life of the model, so supplying it directly
+drops the first call. The alias lookup still runs, so the version served is
+still resolved at runtime and model promotion still rolls the service forward.
+
+Only worth doing if measurement shows registry round trips are a real part of
+the cold start.
+
+Note the value re-embeds the project and location
+(projects/{p}/locations/{l}/models/{id}), which the Go service otherwise
+resolves from ADC and LOCATION: terraform would have to build it from
+var.project_id and var.region, and the numeric model id has no terraform data
+source, so that part has to come from `gcloud ai models list`.
+
+A stale value 404s on the alias lookup and looks exactly like a model that was
+never promoted, so it needs validating against the running project at startup.
 * TODO fix vertex pipeline runs
 Blocked by quota limit.
 
