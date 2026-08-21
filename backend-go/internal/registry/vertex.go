@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
 )
 
 // ErrNoProductionModel reports that the registry holds no version aliased
@@ -80,8 +82,8 @@ func (c *Client) aliasedVersion(ctx context.Context, parent string) (ProductionM
 	if err := c.getJSON(ctx, endpoint, &body); err != nil {
 		// The alias is a sub-resource of a model that does exist, so "never
 		// promoted" arrives as a 404 rather than an empty result.
-		var status *statusError
-		if errors.As(err, &status) && status.code == http.StatusNotFound {
+		var status *httpx.StatusError
+		if errors.As(err, &status) && status.Code == http.StatusNotFound {
 			return ProductionModel{}, fmt.Errorf(
 				"%s has no @%s alias: %w",
 				parent, c.cfg.ProductionAlias, ErrNoProductionModel,
