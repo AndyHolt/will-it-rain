@@ -11,6 +11,11 @@ import (
 const (
 	testParent      = "projects/will-it-rain-496308/locations/europe-west2/models/1234567890"
 	testArtifactURI = "gs://will-it-rain-496308-models/models/20260809T233603Z"
+
+	// What the list call reports: the artefacts of whichever version is
+	// @default. Deliberately a later training run than testArtifactURI —
+	// @production is routinely an older version than the newest registered.
+	testListedArtifactURI = "gs://will-it-rain-496308-models/models/20260816T233558Z"
 )
 
 // vertexStub answers the two calls ResolveProduction makes. Either body may be
@@ -48,7 +53,9 @@ func vertexStub(t *testing.T, listBody, versionBody string) http.HandlerFunc {
 }
 
 func listResponse(name string) string {
-	return `{"models":[{"name":"` + name + `","displayName":"will-it-rain"}]}`
+	return `{"models":[{"name":"` + name + `","displayName":"will-it-rain",` +
+		`"versionId":"4","versionAliases":["default"],` +
+		`"artifactUri":"` + testListedArtifactURI + `"}]}`
 }
 
 func versionResponse(name, versionID, artifactURI string) string {
@@ -73,12 +80,14 @@ func TestResolveProduction(t *testing.T) {
 	}
 }
 
-// Both calls accept a versioned resource name in the `name` field. Carrying an
-// "@1" through to the alias lookup would build "…@1@production" and 404.
+// The alias lookup answers with the name it was asked for, alias suffix and
+// all — "…/models/1234567890@production" is the ordinary response, not an edge
+// case. Carrying that (or an "@1" from the list call) into the next request
+// would build "…@production@production" and 404.
 func TestResolveProductionStripsVersionSuffix(t *testing.T) {
 	client := newTestClient(t, vertexStub(t,
 		listResponse(testParent+"@1"),
-		versionResponse(testParent+"@3", "3", testArtifactURI),
+		versionResponse(testParent+"@production", "3", testArtifactURI),
 	))
 
 	got, err := client.ResolveProduction(context.Background())
@@ -87,6 +96,28 @@ func TestResolveProductionStripsVersionSuffix(t *testing.T) {
 	}
 	if got.ResourceName != testParent {
 		t.Errorf("ResourceName = %q, want %q", got.ResourceName, testParent)
+	}
+}
+
+// The listed model carries artefacts of its own, and they are the wrong ones:
+// the list call finds the model, the alias call finds the version being served.
+// Resolving the alias is the only reason for the second round trip, so pin that
+// the artefacts come from it.
+func TestResolveProductionPrefersTheAliasedVersionsArtefacts(t *testing.T) {
+	client := newTestClient(t, vertexStub(t,
+		listResponse(testParent),
+		versionResponse(testParent, "3", testArtifactURI),
+	))
+
+	got, err := client.ResolveProduction(context.Background())
+	if err != nil {
+		t.Fatalf("ResolveProduction: %v", err)
+	}
+	if got.ArtifactURI != testArtifactURI {
+		t.Errorf(
+			"ArtifactURI = %q, want @production's %q",
+			got.ArtifactURI, testArtifactURI,
+		)
 	}
 }
 
