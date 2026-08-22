@@ -2,7 +2,9 @@
 // probability of rain.
 //
 // The booster is read from LightGBM's native text format (model.txt) by
-// github.com/dmitryikh/leaves, a pure-Go parser.
+// github.com/dmitryikh/leaves, a pure-Go parser. Its score is then calibrated
+// against the isotonic knots serving.json carries, which is what makes the
+// number a probability of rain rather than a ranking.
 //
 // Model file is read at start up, so the latest @production model is used by
 // every instance. No code changes when a new model is promoted. To serve the

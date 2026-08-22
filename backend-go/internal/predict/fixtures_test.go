@@ -39,10 +39,12 @@ func readSpec(t *testing.T) goldenSpec {
 }
 
 // goldenExpectation is testdata/expected.json, read for the scoring stage: the
-// vector Python assembled and the raw probability it scored.
+// vector Python assembled, the raw probability it scored, and what its
+// calibrator made of that.
 type goldenExpectation struct {
-	FeatureVector []*float64 `json:"feature_vector"`
-	RawProb       float64    `json:"raw_prob"`
+	FeatureVector  []*float64 `json:"feature_vector"`
+	RawProb        float64    `json:"raw_prob"`
+	CalibratedProb float64    `json:"calibrated_prob"`
 }
 
 func readExpected(t *testing.T) goldenExpectation {
@@ -54,8 +56,10 @@ func readExpected(t *testing.T) goldenExpectation {
 	return expected
 }
 
-// goldenEdgeCases is testdata/edge_cases.json. Only the prediction cases are
-// read here; the calibration cases are the other half of this package's work.
+// goldenEdgeCases is testdata/edge_cases.json: the constructed cases covering
+// what the captured payload cannot reach. Both halves of this package's work
+// are in it — feature vectors carrying NaN, and the scores either side of the
+// isotonic knots.
 type goldenEdgeCases struct {
 	PredictionCases []struct {
 		Name          string     `json:"name"`
@@ -63,6 +67,12 @@ type goldenEdgeCases struct {
 		FeatureVector []*float64 `json:"feature_vector"`
 		RawProb       float64    `json:"raw_prob"`
 	} `json:"prediction_cases"`
+
+	CalibrationCases []struct {
+		Name           string  `json:"name"`
+		RawProb        float64 `json:"raw_prob"`
+		CalibratedProb float64 `json:"calibrated_prob"`
+	} `json:"calibration_cases"`
 }
 
 func readEdgeCases(t *testing.T) goldenEdgeCases {
@@ -85,6 +95,15 @@ func vector(golden []*float64) []float64 {
 		}
 	}
 	return values
+}
+
+func loadGoldenCalibrator(t *testing.T) *Calibrator {
+	t.Helper()
+	calibrator, err := ParseCalibrator(readTestdata(t, "serving.json"))
+	if err != nil {
+		t.Fatalf("ParseCalibrator on testdata/serving.json: %v", err)
+	}
+	return calibrator
 }
 
 func loadGoldenModel(t *testing.T) *Model {
