@@ -7,6 +7,8 @@ import (
 	"path"
 	"strings"
 	"sync"
+
+	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
 )
 
 // The two files save_serving_artefacts writes into the registry prefix
@@ -84,7 +86,7 @@ func (c *Client) fetchObjects(
 		go func() {
 			defer wg.Done()
 
-			body, err := c.getBytes(ctx, from.objectURL(c.storageBaseURL, name))
+			body, err := httpx.Get(ctx, c.http, from.objectURL(c.storageBaseURL, name))
 
 			mu.Lock()
 			defer mu.Unlock()
