@@ -85,6 +85,8 @@ func (c *Config) applyDefaults() error {
 }
 
 // Forecast is one fetch's worth of hourly data in the canonical column shape.
+// Callers share one: it is handed out from the cache to everything asking for
+// the same hour, so treat it as read-only.
 // TODO consider whether a row-based data structure would be preferable here.
 // This would avoid Times and Columns[feature_name] ending up with different
 // lengths, and ensure full population of columns.
@@ -99,10 +101,11 @@ type Forecast struct {
 	Columns map[string][]float64
 }
 
-// Client fetches the forecast for one fixed location.
+// Client fetches the forecast for one fixed location, caching the result.
 type Client struct {
-	http *http.Client
-	cfg  Config
+	http  *http.Client
+	cfg   Config
+	cache *cache
 
 	// Overridden in tests.
 	baseURL string
@@ -116,12 +119,19 @@ func New(cfg Config) (*Client, error) {
 	return &Client{
 		http:    &http.Client{Timeout: requestTimeout},
 		cfg:     cfg,
+		cache:   newCache(cacheTTL),
 		baseURL: currentForecastBaseURL,
 	}, nil
 }
 
-// Fetch returns the current forecast for the configured location.
+// Fetch returns the current forecast for the configured location, reusing the
+// last one for cacheTTL rather than asking Open-Meteo again.
 func (c *Client) Fetch(ctx context.Context) (*Forecast, error) {
+	return c.cache.get(ctx, c.fetch)
+}
+
+// fetch goes to Open-Meteo unconditionally.
+func (c *Client) fetch(ctx context.Context) (*Forecast, error) {
 	payload, err := httpx.Get(ctx, c.http, c.requestURL())
 	if err != nil {
 		return nil, fmt.Errorf("fetching forecast from Open-Meteo: %w", err)
