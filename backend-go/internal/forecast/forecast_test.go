@@ -149,9 +149,12 @@ func TestFetchDistinguishesTransportFromDecodeFailures(t *testing.T) {
 		want    string
 	}{
 		{
+			// A rejected parameter rather than a 429 or a 5xx: those are
+			// retried in internal/httpx, which would make this a slow test of
+			// that policy instead of a test of what Fetch reports.
 			name: "upstream failure",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
-				http.Error(w, "rate limited", http.StatusTooManyRequests)
+				http.Error(w, `{"reason":"latitude must be in range"}`, http.StatusBadRequest)
 			},
 			want: "fetching forecast",
 		},

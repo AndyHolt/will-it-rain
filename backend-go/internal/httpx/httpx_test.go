@@ -9,6 +9,10 @@ import (
 	"testing"
 )
 
+// noRetry isolates a single attempt, for the tests that are about what one
+// response becomes rather than about how many are made.
+var noRetry = RetryPolicy{Attempts: 1}
+
 // newTestServer stubs an endpoint and returns its URL and a client for it.
 func newTestServer(t *testing.T, handler http.HandlerFunc) (*http.Client, string) {
 	t.Helper()
@@ -75,7 +79,9 @@ func TestGetTruncatesLargeErrorBody(t *testing.T) {
 		}
 	})
 
-	_, err := Get(context.Background(), client, url)
+	// A 502 is retryable, and this test is about the body rather than the
+	// retrying, so it goes through the policy that does neither.
+	_, err := GetWithRetryPolicy(context.Background(), client, url, noRetry)
 	if err == nil {
 		t.Fatal("Get succeeded against a 502, want error")
 	}
