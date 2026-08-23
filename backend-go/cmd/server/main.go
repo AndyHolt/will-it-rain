@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -65,11 +66,6 @@ func run(ctx context.Context, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	model, err := loadModel(ctx, cfg, logger)
-	if err != nil {
-		return err
-	}
-
 	forecasts, err := forecast.New(forecast.Config{
 		Latitude:  cfg.latitude,
 		Longitude: cfg.longitude,
@@ -78,7 +74,65 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("forecast client: %w", err)
 	}
 
+	// Load both the model and current forecast concurrently. Cloud Run scales
+	// to zero, which makes this a common path for many requests, not a
+	// once-per-deploy delay which the user never sees while services rotate.
+	startupCtx, abandon := context.WithTimeout(ctx, startupTimeout)
+	defer abandon()
+
+	started := time.Now()
+
+	var (
+		model    *server.Model
+		modelErr error
+	)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		model, modelErr = loadModel(startupCtx, cfg, logger)
+		if modelErr != nil {
+			// An instance with no model is not going to serve, so there is
+			// nothing left for a forecast to be warm for. Abandoning it here
+			// rather than waiting out its budget is what keeps a doomed
+			// startup quick to fail, and so quick for Cloud Run to retry.
+			abandon()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		warmForecast(startupCtx, forecasts, logger)
+	}()
+
+	wg.Wait()
+
+	if modelErr != nil {
+		return modelErr
+	}
+	logger.Info("startup complete", "elapsed_ms", time.Since(started).Milliseconds())
+
 	return serve(ctx, cfg.port, server.New(model, forecasts, logger).Handler(), logger)
+}
+
+// warmForecast fills the forecast cache so the first request does not have to.
+//
+// Best-effort, if forecast unavailable, just leave cache empty to be fetched when handling request.
+func warmForecast(ctx context.Context, forecasts server.Fetcher, logger *slog.Logger) {
+	started := time.Now()
+	if _, err := forecasts.Fetch(ctx); err != nil {
+		// A cancelled fetch is startup being abandoned — a failed model load,
+		// or a SIGTERM — and both of those report themselves. A deadline or a
+		// refusal from Open-Meteo is this fetch's own news, and is worth
+		// saying so the first slow request is attributable.
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			logger.Warn("could not warm the forecast cache: the first prediction will fetch it",
+				"error", err, "elapsed_ms", time.Since(started).Milliseconds())
+		}
+		return
+	}
+	logger.Info("warmed the forecast cache", "elapsed_ms", time.Since(started).Milliseconds())
 }
 
 // loadModel resolves @production and unpacks its artefacts.
@@ -88,8 +142,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 // backend's behaviour, and it is the state the project is in until a pipeline
 // run has promoted something.
 func loadModel(ctx context.Context, cfg config, logger *slog.Logger) (*server.Model, error) {
-	ctx, cancel := context.WithTimeout(ctx, startupTimeout)
-	defer cancel()
+	started := time.Now()
 
 	client, err := registry.New(ctx, registry.Config{
 		Region:           cfg.region,
@@ -117,6 +170,7 @@ func loadModel(ctx context.Context, cfg config, logger *slog.Logger) (*server.Mo
 	logger.Info("loaded model",
 		"model_version", model.VersionID,
 		"model_resource", model.ResourceName,
+		"elapsed_ms", time.Since(started).Milliseconds(),
 	)
 	return model, nil
 }

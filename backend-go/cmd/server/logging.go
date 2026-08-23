@@ -13,7 +13,14 @@ import (
 // in the payload. Stdout rather than stderr for the same reason the Python
 // backend chose it: Cloud Run maps stderr to ERROR.
 func newLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	return slog.New(slog.NewJSONHandler(os.Stdout, cloudLoggingOptions()))
+}
+
+// cloudLoggingOptions is the key renaming, split out so a test can record
+// through the same handler the service logs through — asserting on a severity
+// the deployed service does not emit would pin nothing.
+func cloudLoggingOptions() *slog.HandlerOptions {
+	return &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
 			switch attr.Key {
@@ -29,5 +36,5 @@ func newLogger() *slog.Logger {
 			}
 			return attr
 		},
-	}))
+	}
 }
