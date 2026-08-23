@@ -42,7 +42,8 @@ Recipes that hit GCP are **deliberately absent from `make help`** so they aren't
 one tab-complete away, but they exist: `image`, `compile-pipeline`,
 `upload-pipeline`, `deploy-pipeline`, `trigger-pipeline-from-local`,
 `trigger-pipeline-via-scheduler`, `clean`, `backend-image`, `backend-deploy`,
-`frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the Makefile for the
+`backend-go-image`, `backend-go-deploy`, `frontend-deploy`, `tf-init`,
+`tf-plan`, `tf-apply`. Read the Makefile for the
 current set. `golden-fixtures` is hidden for a different reason — it needs no
 GCP, but it retrains a model and rewrites checked-in fixtures.
 
