@@ -65,10 +65,15 @@ func TestWarmForecastFillsTheCache(t *testing.T) {
 	logger, logs := captureLogs(t)
 	fetcher := &stubFetcher{}
 
-	warmForecast(context.Background(), fetcher, logger)
+	warmed := warmForecast(context.Background(), fetcher, logger)
 
 	if got := fetcher.fetches.Load(); got != 1 {
 		t.Errorf("made %d fetches, want 1", got)
+	}
+	// Returned as well as cached, because the startup column check runs
+	// against it before any request has one of its own.
+	if warmed == nil {
+		t.Error("warmForecast returned no forecast on the ordinary path")
 	}
 	if !loggedAt(logs(), "INFO", "warmed") {
 		t.Errorf("no INFO line reporting the warm-up: %v", logs())
@@ -83,7 +88,9 @@ func TestWarmForecastSurvivesAFailure(t *testing.T) {
 	logger, logs := captureLogs(t)
 	fetcher := &stubFetcher{err: errors.New("open-meteo is down")}
 
-	warmForecast(context.Background(), fetcher, logger)
+	if warmed := warmForecast(context.Background(), fetcher, logger); warmed != nil {
+		t.Errorf("warmForecast returned %v after a failed fetch, want nil", warmed)
+	}
 
 	if !loggedAt(logs(), "WARNING", "could not warm") {
 		t.Errorf("no WARNING line reporting the failure: %v", logs())

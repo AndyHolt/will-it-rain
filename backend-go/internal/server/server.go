@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
@@ -41,6 +42,10 @@ type Server struct {
 
 	// now is the clock the anchor is picked against, a seam for tests.
 	now func() time.Time
+
+	// reported is the forecast the missing-feature report was last made
+	// against. See reportMissing.
+	reported atomic.Pointer[forecast.Forecast]
 }
 
 // New returns a Server serving model, which may be nil.
@@ -149,7 +154,61 @@ func (s *Server) predict(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.reportMissing(current, prediction.AnchorUTC)
 	s.writeJSON(w, http.StatusOK, prediction)
+}
+
+// reportMissing says what this forecast could not fill, once per fetch.
+//
+// Per fetch, because that is the cadence at which the answer changes: the
+// forecast is cached for ten minutes, so reporting per request would repeat
+// one finding for every caller in that window, and reporting only at startup
+// would miss every refresh after the first. The cache hands the same
+// *forecast.Forecast to everything asking within the TTL, so identity is what
+// makes "this fetch, already reported" answerable — and the swap is atomic so
+// the requests racing on a cold cache produce one line between them rather
+// than one each.
+//
+// Nothing here refuses to serve. Four of seventy features are already missing
+// routinely, and on a service that scales to zero, refusing would turn drift
+// into an outage at the next cold start.
+func (s *Server) reportMissing(f *forecast.Forecast, anchor time.Time) {
+	previous := s.reported.Load()
+	if previous == f || !s.reported.CompareAndSwap(previous, f) {
+		return
+	}
+
+	missing, err := s.model.Missing(f, anchor)
+	if err != nil {
+		// Not reachable from here: the prediction that chose this anchor
+		// assembled its vector from this same forecast. Logged rather than
+		// ignored, because if that ever stops holding, this is where it shows.
+		s.log.Error("accounting for the missing features", "error", err)
+		return
+	}
+	if !missing.Any() {
+		return
+	}
+
+	// A column or an hour the forecast did not supply is a partial response or
+	// a spec the client has drifted from — a bug, and one no later fetch
+	// clears on its own.
+	if len(missing.Columns) > 0 || len(missing.Lags) > 0 {
+		s.log.Warn("the forecast does not supply every feature the model was fitted on",
+			"absent_columns", missing.Columns,
+			"uncovered_lags", missing.Lags,
+			"model_version", s.model.VersionID,
+		)
+	}
+	// A value Open-Meteo simply did not report at that hour is routine, so it
+	// is a count and not a list of names.
+	if missing.Values > 0 {
+		s.log.Info("features with no value at the anchor hour",
+			"features_without_value", missing.Values,
+			"features_total", len(s.model.spec.FeatureCols),
+			"anchor_utc", anchor.UTC().Format(time.RFC3339),
+		)
+	}
 }
 
 func (s *Server) writeError(w http.ResponseWriter, status int, detail string) {

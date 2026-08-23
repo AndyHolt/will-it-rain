@@ -107,6 +107,21 @@ func (m *Model) Predict(f *forecast.Forecast, now time.Time) (PredictResponse, e
 	}, nil
 }
 
+// Missing accounts for the features this model could not fill from f at
+// anchor, so the caller can report the gaps a prediction was made over.
+//
+// Separate from Predict rather than returned by it: the forecast is cached, so
+// what is missing changes when the fetch does and not when a request arrives.
+func (m *Model) Missing(f *forecast.Forecast, anchor time.Time) (features.Missing, error) {
+	return m.spec.Missing(f, anchor)
+}
+
+// AbsentColumns names the columns this model reads and f does not carry. The
+// anchor-free half of Missing, for the startup check.
+func (m *Model) AbsentColumns(f *forecast.Forecast) []string {
+	return m.spec.AbsentColumns(f)
+}
+
 // decision is serving.json's decision half — the part neither
 // internal/features nor internal/predict reads.
 type decision struct {
