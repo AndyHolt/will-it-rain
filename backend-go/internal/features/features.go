@@ -75,7 +75,7 @@ func (s *Spec) Vector(f *forecast.Forecast, anchor time.Time) ([]float64, error)
 
 	vector := make([]float64, len(s.FeatureCols))
 	for i, name := range s.FeatureCols {
-		vector[i] = s.value(f, rows, anchor, name)
+		vector[i], _ = s.lookup(f, rows, anchor, name)
 	}
 	return vector, nil
 }
@@ -108,14 +108,40 @@ func (s *Spec) rowsByLag(f *forecast.Forecast, anchor time.Time) (map[int]int, e
 	return rows, nil
 }
 
-// value resolves one feature name, following the same four cases
-// build_features produces.
-func (s *Spec) value(f *forecast.Forecast, rows map[int]int, anchor time.Time, name string) float64 {
+// gap says why a feature could not be filled. Vector treats every gap the
+// same — NaN, which is what the model was fitted to cope with — so this is
+// only read by Missing, which has to tell Open-Meteo's routine sparseness
+// apart from a forecast that no longer answers what the model asks for.
+type gap uint8
+
+const (
+	// filled: a real value, and the only case carrying one.
+	filled gap = iota
+
+	// unfitted: dropped before fitting, so missing by definition rather than
+	// by anything the forecast did or did not send.
+	unfitted
+
+	// absentColumn: the forecast carries no such column, at any hour.
+	absentColumn
+
+	// uncoveredHour: the column is there, but has no row at the hour this
+	// feature reads — a lag reaching past the start of the forecast, or a
+	// column that ends before Times does.
+	uncoveredHour
+
+	// noValue: column and hour are both there, and hold NaN.
+	noValue
+)
+
+// lookup resolves one feature name, following the same four cases
+// build_features produces, and says which of them it took.
+func (s *Spec) lookup(f *forecast.Forecast, rows map[int]int, anchor time.Time, name string) (float64, gap) {
 	switch name {
 	case hourOfDayFeature:
-		return float64(anchor.Hour())
+		return float64(anchor.Hour()), filled
 	case monthFeature:
-		return float64(anchor.Month())
+		return float64(anchor.Month()), filled
 	}
 
 	column, lag := s.splitLag(name)
@@ -124,20 +150,23 @@ func (s *Spec) value(f *forecast.Forecast, rows map[int]int, anchor time.Time, n
 	// a feature. build_features is handed the trimmed frame for the same
 	// reason.
 	if slices.Contains(s.SparseColumns, column) {
-		return math.NaN()
+		return math.NaN(), unfitted
 	}
 	values, ok := f.Columns[column]
 	if !ok {
-		return math.NaN()
+		return math.NaN(), absentColumn
 	}
 	row, ok := rows[lag]
 	// The bounds check restates Forecast's every-column-is-len(Times) rule
 	// rather than trusting it: a feature that reads NaN is recoverable, and a
 	// panic during startup is not.
 	if !ok || row >= len(values) {
-		return math.NaN()
+		return math.NaN(), uncoveredHour
 	}
-	return values[row]
+	if value := values[row]; !math.IsNaN(value) {
+		return value, filled
+	}
+	return math.NaN(), noValue
 }
 
 // splitLag separates a lagged feature name into the column it lags and its lag
