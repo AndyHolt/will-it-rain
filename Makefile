@@ -88,6 +88,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
 	backend-go-image backend-go-deploy \
+	parity \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy \
@@ -338,6 +339,25 @@ backend-go-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_GO_SERVICE) \
 	    --region=$(REGION) \
 	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
+
+# ---------------------------------------------------------------------------
+# Migration verification
+# ---------------------------------------------------------------------------
+
+# Compare the deployed backend and backend-go answers field by field. The
+# gate on flipping Firebase Hosting to the Go service; docs/cold-start.md is
+# the other half of that verification.
+#
+# Hidden from `make help` with the rest of the recipes that reach GCP.
+# PARITY_ARGS passes through the script's own flags, e.g.
+#     make parity PARITY_ARGS="--samples 3"
+PARITY_ARGS ?=
+
+parity:
+	uv run --script scripts/parity.py \
+	    --project $(PROJECT_ID) \
+	    --region $(REGION) \
+	    $(PARITY_ARGS)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload
