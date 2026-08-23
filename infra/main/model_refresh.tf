@@ -98,6 +98,25 @@ resource "google_cloud_run_v2_service_iam_member" "refresher_invoker" {
   member   = "serviceAccount:${google_service_account.refresher.email}"
 }
 
+# Read the image the rolled revision will run. Surprising, because nothing
+# here pulls it: the Cloud Run service agent does that at runtime, as itself.
+# But `services.update` validates the image against the *calling* principal
+# before it will create a revision, so without this the API call 403s on
+# `artifactregistry.repositories.downloadArtifacts` and no revision is
+# created at all — the same silent outcome as the invoker role above, with
+# the alias moved and the backend still serving the old model.
+#
+# Scoped to the one repository rather than the project (which is how the
+# pipeline SA holds the role, in service_accounts.tf): every image the
+# refresher ever rolls is in here.
+resource "google_artifact_registry_repository_iam_member" "refresher_image_reader" {
+  project    = google_artifact_registry_repository.images.project
+  location   = google_artifact_registry_repository.images.location
+  repository = google_artifact_registry_repository.images.name
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${google_service_account.refresher.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Function (gen 2) — Pub/Sub-triggered via Eventarc
 # ---------------------------------------------------------------------------
