@@ -1,0 +1,6 @@
+# Golden fixtures are test-only, and the largest thing in the directory.
+testdata/
+
+.dockerignore
+Dockerfile
+.pre-commit-config.yaml
