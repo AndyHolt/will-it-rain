@@ -30,9 +30,13 @@ IMAGE_TAG             ?= latest
 BACKEND_IMAGE_NAME    := backend
 BACKEND_IMAGE_TAG     ?= latest
 BACKEND_SERVICE       := backend
+BACKEND_GO_IMAGE_NAME := backend-go
+BACKEND_GO_IMAGE_TAG  ?= latest
+BACKEND_GO_SERVICE    := backend-go
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
 BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
+BACKEND_GO_IMAGE_SENTINEL := build/.backend-go-image-pushed
 BACKEND_DEV_PORT       ?= 8080
 
 # Files baked into the pipeline image. If any of these change, the image
@@ -52,6 +56,15 @@ BACKEND_IMAGE_SOURCES := backend/Dockerfile \
 			 will_it_rain_shared/pyproject.toml \
 			 $(shell find backend/src -name '*.py') \
 			 $(shell find will_it_rain_shared/src -name '*.py')
+
+# Files baked into the Go backend image. Tests are excluded deliberately:
+# they are in the build context but never in the image, so a test-only edit
+# would otherwise push a byte-identical binary under a fresh digest. The
+# equivalent Python lists get this for free from the src/ vs tests/ split.
+BACKEND_GO_IMAGE_SOURCES := backend-go/Dockerfile backend-go/.dockerignore \
+			    backend-go/go.mod backend-go/go.sum \
+			    $(shell find backend-go/cmd backend-go/internal \
+					-name '*.go' -not -name '*_test.go')
 
 # Files baked into the model-refresher zip. Same staged-artifact pattern as
 # the pipeline YAML: CI zips + uploads to a fixed GCS path,
@@ -74,6 +87,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	image compile-pipeline upload-pipeline deploy-pipeline \
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
+	backend-go-image backend-go-deploy \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy \
@@ -292,6 +306,38 @@ backend-deploy: $(BACKEND_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_SERVICE) \
 	    --region=$(REGION) \
 	    --image=$(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG)
+
+# ---------------------------------------------------------------------------
+# Go backend build / deploy
+# ---------------------------------------------------------------------------
+
+# Build and push the Go backend image. The Dockerfile cross-compiles to
+# amd64 whatever it is built on, but the --platform flag is still what stops
+# the *manifest* being tagged arm64 from an Apple Silicon machine — which
+# Cloud Run rejects. Context is backend-go/, not the repo root: the Go module
+# is self-contained, where backend/ needs the uv workspace above it.
+backend-go-image: $(BACKEND_GO_IMAGE_SENTINEL)
+
+$(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
+	docker buildx build \
+	    --platform linux/amd64 \
+	    --push \
+	    --tag $(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG) \
+	    --file backend-go/Dockerfile \
+	    backend-go
+	@mkdir -p $(dir $@) && touch $@
+
+# Roll out a new revision of the backend-go service. Same reasoning as
+# `backend-deploy`: Cloud Run revisions pin a digest, so a pushed image does
+# not reach traffic on its own.
+#
+# The service itself is Terraform's, and does not exist yet — until
+# cloud_run_go.tf lands, `backend-go-image` is the useful half of this pair,
+# and it is what gives that first apply a :latest tag to point at.
+backend-go-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
+	gcloud run services update $(BACKEND_GO_SERVICE) \
+	    --region=$(REGION) \
+	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload
