@@ -1,9 +1,9 @@
 name: deploy
 
 # Single deploy workflow on merge to main. Path-filtered: each component
-# (pipeline, backend, frontend, infra) only builds / deploys when its
-# inputs changed. Auth is via the bootstrap WIF provider impersonating
-# the terraform SA — see infra/bootstrap/main.tf for the role set.
+# (pipeline, backend, backend-go, frontend, infra) only builds / deploys when
+# its inputs changed. Auth is via the bootstrap WIF provider impersonating the
+# terraform SA — see infra/bootstrap/main.tf for the role set.
 
 on:
   push:
@@ -36,6 +36,7 @@ jobs:
     outputs:
       pipeline: ${{ steps.filter.outputs.pipeline }}
       backend: ${{ steps.filter.outputs.backend }}
+      backend_go: ${{ steps.filter.outputs.backend_go }}
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
       model_refresher: ${{ steps.filter.outputs.model_refresher }}
@@ -63,6 +64,13 @@ jobs:
               - 'uv.lock'
               - 'Makefile'
               - 'config.env'
+            # Narrower than `backend` on purpose: backend-go is a self-contained
+            # Go module with its own go.mod, so neither will_it_rain_shared nor
+            # the uv lockfile is an input to its image.
+            backend_go:
+              - 'backend-go/**'
+              - 'Makefile'
+              - 'config.env'
             frontend:
               - 'frontend/**'
               - 'config.env'
@@ -75,8 +83,8 @@ jobs:
               - 'config.env'
 
   # ---------------------------------------------------------------------------
-  # Build + push container images. Both jobs are independent; either or both
-  # can run, gated by path filters.
+  # Build + push container images. The jobs are independent; any of them can
+  # run, gated by path filters.
   # ---------------------------------------------------------------------------
   build-pipeline-image:
     needs: changes
@@ -113,6 +121,26 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build and push backend image
         run: make backend-image
+
+  build-backend-go-image:
+    needs: changes
+    if: needs.changes.outputs.backend_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker credential helper for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - uses: docker/setup-buildx-action@v3
+      # No Go toolchain step: the Dockerfile's builder stage owns the
+      # compile. go.yml is what runs vet and the tests.
+      - name: Build and push backend-go image
+        run: make backend-go-image
 
   # ---------------------------------------------------------------------------
   # Compile the KFP pipeline spec and upload to GCS. infra/main/scheduler.tf
@@ -165,8 +193,10 @@ jobs:
   #   - infra HCL changed (resource shape), or
   #   - pipeline changed (scheduler.tf reads the freshly-uploaded YAML), or
   #   - model_refresher changed (model_refresh.tf reads the freshly-uploaded zip).
-  # Backend/frontend code changes don't change TF state (backend image is
-  # pinned to :latest in TF, deployed revisions come from `make backend-deploy`).
+  # Backend/frontend code changes don't change TF state (both backend images
+  # are pinned to :latest in TF, deployed revisions come from the deploy jobs
+  # below). The image builds are still gates: applying a service against a tag
+  # whose push has just failed would pin the revision to a stale digest.
   # ---------------------------------------------------------------------------
   terraform-apply:
     needs:
@@ -176,6 +206,7 @@ jobs:
         upload-model-refresher-source,
         build-pipeline-image,
         build-backend-image,
+        build-backend-go-image,
       ]
     if: |
       always() &&
@@ -183,7 +214,8 @@ jobs:
       (needs.compile-and-upload-pipeline.result == 'success' || needs.compile-and-upload-pipeline.result == 'skipped') &&
       (needs.upload-model-refresher-source.result == 'success' || needs.upload-model-refresher-source.result == 'skipped') &&
       (needs.build-pipeline-image.result == 'success' || needs.build-pipeline-image.result == 'skipped') &&
-      (needs.build-backend-image.result == 'success' || needs.build-backend-image.result == 'skipped')
+      (needs.build-backend-image.result == 'success' || needs.build-backend-image.result == 'skipped') &&
+      (needs.build-backend-go-image.result == 'success' || needs.build-backend-go-image.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       TF_VAR_weather_latitude: ${{ secrets.WEATHER_LATITUDE }}
@@ -234,6 +266,34 @@ jobs:
           gcloud run services update backend \
             --region=${{ env.REGION }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/will-it-rain-images/backend:latest
+
+  # `gcloud run services update` needs the service to exist already —
+  # cloud_run_go.tf creates it, and defaults it to the :latest tag this job
+  # has just moved. So terraform-apply is a real gate here, not just ordering.
+  backend-go-deploy:
+    needs: [changes, build-backend-go-image, terraform-apply]
+    if: |
+      always() &&
+      needs.changes.outputs.backend_go == 'true' &&
+      needs.build-backend-go-image.result == 'success' &&
+      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-config
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      # Same reason as backend-deploy: `make backend-go-deploy` depends on the
+      # image sentinel, absent on a fresh runner, so it would rebuild the image
+      # build-backend-go-image just pushed.
+      - name: Roll new Cloud Run revision
+        run: |
+          gcloud run services update backend-go \
+            --region=${{ env.REGION }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/will-it-rain-images/backend-go:latest
 
   frontend-deploy:
     needs: [changes, terraform-apply]
