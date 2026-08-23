@@ -5,9 +5,9 @@
 # When the training pipeline moves the @production alias, the promote step
 # publishes a message to the `model-promoted` Pub/Sub topic. A Cloud Function
 # (gen 2) subscribed via Eventarc receives the event and bumps the
-# MODEL_REFRESH_AT env var on the backend Cloud Run service, forcing a new
-# revision. The new revision re-resolves @production at startup and loads the
-# fresh model.
+# MODEL_REFRESH_AT env var on each Cloud Run service named by
+# BACKEND_SERVICES, forcing a new revision. The new revision re-resolves
+# @production at startup and loads the fresh model.
 #
 # We can't reload in-process on the backend itself: Pub/Sub push hits exactly
 # one instance, so any other warm instances would stay stale. Forcing a
@@ -91,7 +91,7 @@ resource "google_project_iam_member" "refresher_eventarc_receiver" {
 resource "google_cloudfunctions2_function" "model_refresher" {
   name        = "model-refresher"
   location    = var.region
-  description = "Bumps MODEL_REFRESH_AT on the backend service when @production moves."
+  description = "Bumps MODEL_REFRESH_AT on the backend services when @production moves."
 
   build_config {
     # uv is the default dependency manager for python314+ in the Cloud
@@ -116,12 +116,17 @@ resource "google_cloudfunctions2_function" "model_refresher" {
     service_account_email = google_service_account.refresher.email
 
     # BACKEND_SERVICES is comma-separated: the function refreshes every
-    # service named. One today; the blue/green backend migration adds the
-    # second here.
+    # service named. Both backends are listed for the length of the blue/green
+    # migration, so a promotion reaches whichever one hosting points at, and
+    # the green service is never validated against a model the blue one has
+    # moved past. Teardown drops backend-go and leaves a single name.
     environment_variables = {
-      PROJECT          = var.project_id
-      LOCATION         = var.region
-      BACKEND_SERVICES = google_cloud_run_v2_service.backend.name
+      PROJECT  = var.project_id
+      LOCATION = var.region
+      BACKEND_SERVICES = join(",", [
+        google_cloud_run_v2_service.backend.name,
+        google_cloud_run_v2_service.backend_go.name,
+      ])
     }
   }
 
