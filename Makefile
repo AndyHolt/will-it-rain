@@ -91,7 +91,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	parity \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
-	frontend-build frontend-site-check frontend-deploy \
+	frontend-build frontend-site-check frontend-deploy frontend-icons \
 	tf-init tf-plan tf-apply
 
 # ---------------------------------------------------------------------------
@@ -433,6 +433,13 @@ tf-apply:
 frontend-build:
 	pnpm -C frontend install --frozen-lockfile
 	pnpm -C frontend build
+
+# Regenerate frontend/public/ icons from the cloud-rain mark. Hidden from
+# `make help` for the same reason as golden-fixtures: it needs no GCP, but it
+# rewrites checked-in assets, and it wants librsvg + ImageMagick installed.
+# Only needed when the mark itself changes.
+frontend-icons:
+	./scripts/generate-icons.sh
 
 # frontend/firebase.json has to repeat HOSTING_SITE_ID — JSON can't
 # interpolate, and the Firebase CLI takes the site from firebase.json only
