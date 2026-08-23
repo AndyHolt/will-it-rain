@@ -115,10 +115,13 @@ resource "google_cloudfunctions2_function" "model_refresher" {
     timeout_seconds       = 60
     service_account_email = google_service_account.refresher.email
 
+    # BACKEND_SERVICES is comma-separated: the function refreshes every
+    # service named. One today; the blue/green backend migration adds the
+    # second here.
     environment_variables = {
-      PROJECT         = var.project_id
-      LOCATION        = var.region
-      BACKEND_SERVICE = google_cloud_run_v2_service.backend.name
+      PROJECT          = var.project_id
+      LOCATION         = var.region
+      BACKEND_SERVICES = google_cloud_run_v2_service.backend.name
     }
   }
 
