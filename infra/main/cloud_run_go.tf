@@ -103,6 +103,20 @@ resource "google_cloud_run_v2_service_iam_member" "backend_go_public" {
   member   = "allUsers"
 }
 
+# The refresher rolls this service forward too, so it needs the same
+# run.developer it has on the blue service (model_refresh.tf). It lives here
+# rather than beside that grant so deleting this file at teardown takes the
+# permission with the service it is about.
+#
+# No matching serviceAccountUser grant is needed: backend-go runs as the same
+# SA as backend, and `refresher_acts_as_backend` already covers acting as it.
+resource "google_cloud_run_v2_service_iam_member" "refresher_backend_go_developer" {
+  name     = google_cloud_run_v2_service.backend_go.name
+  location = google_cloud_run_v2_service.backend_go.location
+  role     = "roles/run.developer"
+  member   = "serviceAccount:${google_service_account.refresher.email}"
+}
+
 output "backend_go_url" {
   value       = google_cloud_run_v2_service.backend_go.uri
   description = "Public URL of the backend-go Cloud Run service (migration only)."
