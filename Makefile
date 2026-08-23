@@ -331,9 +331,9 @@ $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
 # `backend-deploy`: Cloud Run revisions pin a digest, so a pushed image does
 # not reach traffic on its own.
 #
-# The service itself is Terraform's, and does not exist yet — until
-# cloud_run_go.tf lands, `backend-go-image` is the useful half of this pair,
-# and it is what gives that first apply a :latest tag to point at.
+# The service itself is Terraform's (cloud_run_go.tf), and defaults to the
+# :latest tag — so `backend-go-image` has to have pushed one before that
+# service can first be applied.
 backend-go-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_GO_SERVICE) \
 	    --region=$(REGION) \

@@ -73,11 +73,25 @@ variable "backend_image" {
   default     = null
 }
 
+# Same shape as backend_image, for the Go service that runs beside it during
+# the migration (cloud_run_go.tf). Goes away with that file at teardown, when
+# `backend` starts serving the Go image under var.backend_image.
+variable "backend_go_image" {
+  type        = string
+  description = "Container image (incl. tag) for the backend-go Cloud Run service. Override in CI to pin per-commit; null derives it from project_id and region."
+  default     = null
+}
+
 locals {
   # coalesce skips null, so an explicit var.backend_image (CI pinning a
   # per-commit tag) still wins over the derived default.
   backend_image = coalesce(
     var.backend_image,
     "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend:latest",
+  )
+
+  backend_go_image = coalesce(
+    var.backend_go_image,
+    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend-go:latest",
   )
 }
