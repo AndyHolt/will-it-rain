@@ -95,3 +95,5 @@ have no defaults, and the recipes are what export them from `config.env`.
   how `config.env` reaches CI, required GitHub secrets.
 - [docs/cold-start.md](docs/cold-start.md) — why scale-to-zero latency is the
   common case here, and how to measure it.
+- [docs/favicons.md](docs/favicons.md) — which platform reads which icon file,
+  and the constraints baked into `scripts/generate-icons.sh`.
