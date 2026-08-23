@@ -84,6 +84,20 @@ resource "google_project_iam_member" "refresher_eventarc_receiver" {
   member  = "serviceAccount:${google_service_account.refresher.email}"
 }
 
+# ...and receiving the event is only half of it. Eventarc delivers *as*
+# `refresher`, and a gen 2 function is invoked through the Cloud Run service
+# underneath it, so the same SA needs run.invoker on that service. Without
+# this the delivery 403s with "The IAM principal lacks {run.routes.invoke}"
+# and Pub/Sub retries until the message ages out: the alias moves, the
+# function never runs, and the backend serves the old model with nothing
+# failing loudly. The backing service takes the function's name.
+resource "google_cloud_run_v2_service_iam_member" "refresher_invoker" {
+  name     = google_cloudfunctions2_function.model_refresher.name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.refresher.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Function (gen 2) — Pub/Sub-triggered via Eventarc
 # ---------------------------------------------------------------------------
