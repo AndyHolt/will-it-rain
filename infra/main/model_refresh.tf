@@ -117,6 +117,13 @@ resource "google_artifact_registry_repository_iam_member" "refresher_image_reade
   member     = "serviceAccount:${google_service_account.refresher.email}"
 }
 
+# Run viewer required to check status after rollout
+resource "google_project_iam_member" "refresher_run_viewer" {
+  project = var.project_id
+  role    = "roles/run.viewer"
+  member  = "serviceAccount:${google_service_account.refresher.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Function (gen 2) — Pub/Sub-triggered via Eventarc
 # ---------------------------------------------------------------------------
