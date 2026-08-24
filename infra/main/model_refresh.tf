@@ -117,6 +117,13 @@ resource "google_artifact_registry_repository_iam_member" "refresher_image_reade
   member     = "serviceAccount:${google_service_account.refresher.email}"
 }
 
+# Run viewer required to check status after rollout
+resource "google_project_iam_member" "refresher_run_viewer" {
+  project = var.project_id
+  role    = "roles/run.viewer"
+  member  = "serviceAccount:${google_service_account.refresher.email}"
+}
+
 # ---------------------------------------------------------------------------
 # Cloud Function (gen 2) — Pub/Sub-triggered via Eventarc
 # ---------------------------------------------------------------------------
@@ -143,9 +150,14 @@ resource "google_cloudfunctions2_function" "model_refresher" {
   }
 
   service_config {
-    max_instance_count    = 1
-    available_memory      = "256M"
-    timeout_seconds       = 60
+    max_instance_count = 1
+    available_memory   = "256M"
+
+    # The function waits for each rollout to *complete*, not merely to be
+    # accepted, so its runtime is the sum of the services' startup times — and
+    # `backend` takes ~35s to become ready (docs/cold-start.md). 300s leaves
+    # room for both services plus a slow image pull.
+    timeout_seconds       = 300
     service_account_email = google_service_account.refresher.email
 
     # BACKEND_SERVICES is comma-separated: the function refreshes every
