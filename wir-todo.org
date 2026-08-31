@@ -17,8 +17,8 @@ GCS (~make upload-pipeline~) rather than reading from ~build/~ at apply time.
 - [X]  Put the additional details behind an "additional info" type display, so they are hidden by default. Possibly a shadcn Collapsible? Not sure what the right element type is. But hidden by default, and viewable if desired. (I think probably not a popover, but probably extra info within the main item/card, but hidden by default).
 - [X] Add a footer with basic information: by me (Andy Holt), link to GitHub repo. 6. I think it's probably also best to have a link in the footer that routes to a new page that links out to the data sources (open-meteo and COSMOS)
 * DONE backend: ensure fetching current forecast is cached
-* TODO fix favicon for display on iOS
-* TODO fix cold start time for backend
+* DONE fix favicon for display on iOS
+* DONE fix cold start time for backend
 - Need to determine what's actually taking so long
 - Possibly bake model into container?
 - Have model compiled into a lightweight format?
@@ -26,7 +26,10 @@ GCS (~make upload-pipeline~) rather than reading from ~build/~ at apply time.
   than starting interpreter and importing packages, but also allows using a much
   more lightweight container which can start up faster. But I suspect this isn't
   the bottleneck!
-* TODO potential further optimisations of go backend cold start
+* INACTIVE potential further optimisations of go backend cold start
+UPDATE: currently not required, backend service cold start time is adequate
+without this
+
 Skip the model registry's display-name lookup with a MODEL_PARENT_RESOURCE env
 var. Resolving the champion at startup is currently three sequential stages:
 
@@ -49,20 +52,62 @@ source, so that part has to come from `gcloud ai models list`.
 
 A stale value 404s on the alias lookup and looks exactly like a model that was
 never promoted, so it needs validating against the running project at startup.
-* TODO fix vertex pipeline runs
+* DONE fix vertex pipeline runs
 Blocked by quota limit.
 
 Attempting to fix by migrating project into my main GCP account, instead of
 being isolated in a separate account.
+
+Fixed by moving project into my main Gcloud account
 * TODO improve monitoring and alerting for pipeline runs
 * TODO consider impact of using colima instead of docker desktop for dev container runtime
-* TODO Model version in frontend to display training date, not just a version number
-* TODO check billing alerts correctly configured
+* TODO Model version in frontend to display training date, not just a version number?
+* DONE check billing alerts correctly configured
 * TODO add descriptive names to pipeline components
 * TODO improve model
+- Hyperparameter tuning?
+- Use more/different features?
 * TODO add additional evaluation metrics and indicators
 * TODO ensure proper logging in pipeline components
 * TODO fix backoff strategy for pipeline data fetching
 currently backoff strategy is too short. Give longer waits to ensure rate
 limiting isn't encountered. Since pipeline runs offline, waiting a few tens of
 seconds, or even minutes, is perfectly reasonable.
+* TODO cleanup policy for images in Artifact Registry
+Currently Artifact Registry has no cleanup policy, meaning docker images are
+kept permanently. This will lead to growing costs over time.
+
+Add cleanup policies for the registry, where images are kept if they are tagged,
+or from the last 30 days.
+
+With migration to lightweight container for go backend, the container size for
+backend drooped from ~180 MB/image to ~4MB/image. Pipeline images are
+~227MB/image.
+
+First 0.5GB in Artifact Registry are free, so keeping one or two pipeline and
+backend-go images will keep inside free tier.
+
+* TODO cleanup policy for GCS
+Models stored in GCS, I don't think are currently ever cleaned up. While not an
+issue currently, this could eventually lead to unnecessary charges.
+* TODO training metrics display
+Use ~aiplatform.log_classification_matrix~ for confusion matrix and ROC curve
+* TODO model refresher's info logs never reach Cloud Logging
+~model_refresher/main.py~ builds a bare ~logging.getLogger(__name__)~ with no
+level set and no handler, so the root logger's default WARNING threshold drops
+both info lines: "Promotion event received for version N" and "Revision rollout
+requested for <service>". Confirmed absent across three publishes to
+~model-promoted~ on 2026-08-30.
+
+Only the success path is blinded — ~logger.exception~ on the rollout failure
+path is above threshold and does show up (the 2026-08-23 Artifact Registry
+permission traceback is in the logs). But the success path is the one you want
+when checking whether a real promotion rolled the backends, and without it the
+only evidence is the new revision name plus the ~MODEL_REFRESH_AT~ value on the
+service.
+
+Fix with ~logging.basicConfig(level=logging.INFO)~ at import, or
+~logger.setLevel~.
+
+Distinct from "ensure proper logging in pipeline components" above: that is
+pipeline code, this is the Cloud Function.
