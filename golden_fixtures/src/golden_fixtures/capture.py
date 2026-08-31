@@ -24,8 +24,9 @@ from will_it_rain_shared.forecast import (
 
 FORECAST_FILENAME = "forecast.fb"
 
-# Must match backend/src/backend/forecast_fetch.py — a fixture fetched over a
-# different window would not exercise the same lags.
+# Must match the window the service requests — `defaultPastHours` and
+# `defaultForecastHours` in backend-go/internal/forecast. A fixture fetched
+# over a different window would not exercise the same lags.
 PAST_HOURS = 24
 FORECAST_HOURS = 24
 

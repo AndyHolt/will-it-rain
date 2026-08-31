@@ -53,11 +53,14 @@ TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 def read_forecast(directory: Path) -> pd.DataFrame:
     """Parse the captured payload into the canonical ``{model}__{variable}`` frame.
 
-    Mirrors the mapping in ``backend/src/backend/forecast_fetch.py`` rather
-    than importing it: that module fetches as it parses, and it is deleted at
-    the end of the migration, while this fixture has to outlive it. The
-    canonical map it produces is precisely what ``expected.json`` pins, so a
-    silent divergence here shows up as a Go test failure rather than nowhere.
+    The mapping came from the Python backend's ``forecast_fetch``, restated
+    here rather than imported because that module fetched as it parsed. With
+    the backend deleted this is no longer a mirror of a second implementation
+    but the oracle itself: the canonical map it produces is what
+    ``expected.json`` pins, and ``forecast.decode`` on the Go side is what
+    that pin then checks. Unlike the scoring below, which stays genuine
+    Python/Go parity through ``will_it_rain_shared``, a rule wrong in both
+    places here would agree and pass.
     """
     payload = (directory / FORECAST_FILENAME).read_bytes()
 
@@ -107,8 +110,9 @@ def pick_fixture_anchor(forecast: pd.DataFrame) -> tuple[pd.Timestamp, pd.Timest
     lands on ``anchor_utc`` rather than trusting a hardcoded index.
 
     The rule — latest forecast hour at or before ``now`` floored to the hour —
-    is ``pick_anchor`` in ``backend/src/backend/forecast_fetch.py``, restated
-    here for the same reason ``read_forecast`` restates the column mapping.
+    came from the Python backend's ``pick_anchor``, and is stated here for the
+    same reason ``read_forecast`` states the column mapping: it is the oracle
+    ``features.PickAnchor`` on the Go side is checked against.
     """
     now_utc = forecast.index[PAST_HOURS] + pd.Timedelta(minutes=30)
     candidates = forecast.index[forecast.index <= now_utc.floor("h")]
