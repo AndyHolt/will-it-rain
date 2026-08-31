@@ -24,7 +24,9 @@ Each job is gated on the path filter for its component:
    Backend and frontend code changes don't alter TF state, so they don't
    trigger apply.
 5. `backend-deploy`, `backend-go-deploy` — `gcloud run services update` against
-   the `:latest` tag the matching image job just pushed.
+   the `backend-go:latest` tag `build-backend-go-image` just pushed. Both
+   services run that image, so both jobs gate on `backend_go`; `backend-deploy`
+   named for the service it updates, not for the image it deploys.
 6. `frontend-deploy` — `make frontend-site-check` + `make frontend-build` +
    `npx firebase-tools deploy --only hosting --project …`.
 
@@ -37,6 +39,10 @@ image the build job just pushed.
 no `pyproject.toml`, no `uv.lock`. `backend-go/` is a self-contained Go module
 and none of those are inputs to its image. Tests for it run in `go.yml`, not
 here; `deploy.yml` only builds and rolls it.
+
+The `backend` filter now gates a build and nothing else: no service runs the
+Python image, so `backend/**` and `will_it_rain_shared/**` changes reach
+`build-backend-image` and stop there. Both go with the Python backend.
 
 `config.env` is in **every** path filter. It names the project everything
 deploys to, so a change to it invalidates every artefact — images would land in
