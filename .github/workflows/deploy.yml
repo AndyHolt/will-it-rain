@@ -266,41 +266,13 @@ jobs:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      # Call gcloud directly rather than `make backend-go-deploy`: the make
+      # Call gcloud directly rather than `make backend-deploy`: the make
       # recipe depends on the image sentinel, which doesn't exist on this
       # fresh runner — it would trigger a redundant local image rebuild.
       # The image was just pushed by build-backend-go-image.
       - name: Roll new Cloud Run revision
         run: |
           gcloud run services update backend \
-            --region=${{ env.REGION }} \
-            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/will-it-rain-images/backend-go:latest
-
-  # `gcloud run services update` needs the service to exist already —
-  # cloud_run_go.tf creates it, and defaults it to the :latest tag this job
-  # has just moved. So terraform-apply is a real gate here, not just ordering.
-  backend-go-deploy:
-    needs: [changes, build-backend-go-image, terraform-apply]
-    if: |
-      always() &&
-      needs.changes.outputs.backend_go == 'true' &&
-      needs.build-backend-go-image.result == 'success' &&
-      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/load-config
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
-      # Same reason as backend-deploy: `make backend-go-deploy` depends on the
-      # image sentinel, absent on a fresh runner, so it would rebuild the image
-      # build-backend-go-image just pushed.
-      - name: Roll new Cloud Run revision
-        run: |
-          gcloud run services update backend-go \
             --region=${{ env.REGION }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/will-it-rain-images/backend-go:latest
 
