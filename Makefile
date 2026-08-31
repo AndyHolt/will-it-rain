@@ -27,14 +27,11 @@ ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME            := pipeline
 IMAGE_TAG             ?= latest
-BACKEND_IMAGE_NAME    := backend
-BACKEND_IMAGE_TAG     ?= latest
 BACKEND_SERVICE       := backend
 BACKEND_GO_IMAGE_NAME := backend-go
 BACKEND_GO_IMAGE_TAG  ?= latest
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
-BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
 BACKEND_GO_IMAGE_SENTINEL := build/.backend-go-image-pushed
 BACKEND_DEV_PORT       ?= 8080
 
@@ -49,17 +46,10 @@ IMAGE_SOURCES    := pipeline/Dockerfile \
 		    $(shell find pipeline/src -name '*.py') \
 		    $(shell find will_it_rain_shared/src -name '*.py')
 
-BACKEND_IMAGE_SOURCES := backend/Dockerfile \
-			 pyproject.toml uv.lock \
-			 backend/pyproject.toml \
-			 will_it_rain_shared/pyproject.toml \
-			 $(shell find backend/src -name '*.py') \
-			 $(shell find will_it_rain_shared/src -name '*.py')
-
-# Files baked into the Go backend image. Tests are excluded deliberately:
-# they are in the build context but never in the image, so a test-only edit
-# would otherwise push a byte-identical binary under a fresh digest. The
-# equivalent Python lists get this for free from the src/ vs tests/ split.
+# Files baked into the backend image. Tests are excluded deliberately: they
+# are in the build context but never in the image, so a test-only edit would
+# otherwise push a byte-identical binary under a fresh digest. The pipeline
+# list above gets this for free from the src/ vs tests/ split.
 BACKEND_GO_IMAGE_SOURCES := backend-go/Dockerfile backend-go/.dockerignore \
 			    backend-go/go.mod backend-go/go.sum \
 			    $(shell find backend-go/cmd backend-go/internal \
@@ -85,8 +75,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline \
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
-	backend-image backend-deploy \
-	backend-go-image \
+	backend-go-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy frontend-icons \
@@ -96,10 +85,11 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 # Dev tooling
 # ---------------------------------------------------------------------------
 #
-# Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, backend,
-# shared library. Frontend tooling (biome, tsc) covers the TypeScript workspace
-# under frontend/. Go tooling (gofmt, vet, go test) covers the module under
-# backend-go/. `check` and `fix` aggregate all three.
+# Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, shared
+# library, model refresher, golden fixtures. Frontend tooling (biome, tsc)
+# covers the TypeScript workspace under frontend/. Go tooling (gofmt, vet, go
+# test) covers the backend module under backend-go/. `check` and `fix`
+# aggregate all three.
 
 # Print available targets (anything whose recipe line carries a `## doc`).
 help:
@@ -298,38 +288,11 @@ trigger-pipeline-via-scheduler:
 # Backend build / deploy
 # ---------------------------------------------------------------------------
 
-# Build and push the backend image. Same cross-compile reasoning as `image`:
-# Cloud Run runs x86_64.
-backend-image: $(BACKEND_IMAGE_SENTINEL)
-
-$(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
-	docker buildx build \
-	    --platform linux/amd64 \
-	    --push \
-	    --tag $(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG) \
-	    --file backend/Dockerfile \
-	    .
-	@mkdir -p $(dir $@) && touch $@
-
-# Roll out a new Cloud Run revision of the `backend` service. It serves the Go
-# image (cloud_run.tf), so that is the image this pushes and the sentinel it
-# depends on — deploying $(BACKEND_IMAGE_NAME) here would put the Python
-# backend back on the live service. Use it after `backend-go-image` to pick up
-# code or promoted-model changes.
-backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
-	gcloud run services update $(BACKEND_SERVICE) \
-	    --region=$(REGION) \
-	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
-
-# ---------------------------------------------------------------------------
-# Go backend build / deploy
-# ---------------------------------------------------------------------------
-
-# Build and push the Go backend image. The Dockerfile cross-compiles to
-# amd64 whatever it is built on, but the --platform flag is still what stops
-# the *manifest* being tagged arm64 from an Apple Silicon machine — which
-# Cloud Run rejects. Context is backend-go/, not the repo root: the Go module
-# is self-contained, where backend/ needs the uv workspace above it.
+# Build and push the backend image. The Dockerfile cross-compiles to amd64
+# whatever it is built on, but the --platform flag is still what stops the
+# *manifest* being tagged arm64 from an Apple Silicon machine — which Cloud
+# Run rejects. Context is backend-go/, not the repo root: the Go module is
+# self-contained, where the pipeline image needs the uv workspace above it.
 backend-go-image: $(BACKEND_GO_IMAGE_SENTINEL)
 
 $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
@@ -340,6 +303,14 @@ $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
 	    --file backend-go/Dockerfile \
 	    backend-go
 	@mkdir -p $(dir $@) && touch $@
+
+# Roll out a new Cloud Run revision of the `backend` service. Cloud Run pins a
+# digest per revision and does not roll on image push, so run this after
+# `backend-go-image` to pick up code or promoted-model changes.
+backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
+	gcloud run services update $(BACKEND_SERVICE) \
+	    --region=$(REGION) \
+	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload
