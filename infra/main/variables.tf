@@ -68,20 +68,20 @@ variable "model_display_name" {
 # can't be written as `default = "${var.region}-…"` — a variable default must be
 # a constant expression — so it's null here and derived in the local below.
 #
-# Named for the image, which is `backend-go` after the source directory that
-# builds it, not for the service it runs on, which is `backend`. The Python
-# `backend` image and the var that pointed at it are gone.
-variable "backend_go_image" {
+# Image, service and source directory are all `backend` now — the `-go` suffix
+# that told the Go image apart from the Python one it replaced went with the
+# Python backend.
+variable "backend_image" {
   type        = string
   description = "Container image (incl. tag) for the backend Cloud Run service. Override in CI to pin per-commit; null derives it from project_id and region."
   default     = null
 }
 
 locals {
-  # coalesce skips null, so an explicit var.backend_go_image (CI pinning a
+  # coalesce skips null, so an explicit var.backend_image (CI pinning a
   # per-commit tag) still wins over the derived default.
-  backend_go_image = coalesce(
-    var.backend_go_image,
-    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend-go:latest",
+  backend_image = coalesce(
+    var.backend_image,
+    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend:latest",
   )
 }

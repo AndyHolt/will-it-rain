@@ -29,7 +29,7 @@ resource "google_cloud_run_v2_service" "backend" {
 
     containers {
       # Derived in variables.tf, or pinned to a per-commit tag by CI.
-      image = local.backend_go_image
+      image = local.backend_image
 
       ports {
         container_port = 8080

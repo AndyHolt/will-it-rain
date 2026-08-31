@@ -28,11 +28,11 @@ IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-ima
 IMAGE_NAME            := pipeline
 IMAGE_TAG             ?= latest
 BACKEND_SERVICE       := backend
-BACKEND_GO_IMAGE_NAME := backend-go
-BACKEND_GO_IMAGE_TAG  ?= latest
+BACKEND_IMAGE_NAME    := backend
+BACKEND_IMAGE_TAG     ?= latest
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
-BACKEND_GO_IMAGE_SENTINEL := build/.backend-go-image-pushed
+BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
 BACKEND_DEV_PORT       ?= 8080
 
 # Files baked into the pipeline image. If any of these change, the image
@@ -50,7 +50,7 @@ IMAGE_SOURCES    := pipeline/Dockerfile \
 # are in the build context but never in the image, so a test-only edit would
 # otherwise push a byte-identical binary under a fresh digest. The pipeline
 # list above gets this for free from the src/ vs tests/ split.
-BACKEND_GO_IMAGE_SOURCES := backend/Dockerfile backend/.dockerignore \
+BACKEND_IMAGE_SOURCES := backend/Dockerfile backend/.dockerignore \
 			    backend/go.mod backend/go.sum \
 			    $(shell find backend/cmd backend/internal \
 					-name '*.go' -not -name '*_test.go')
@@ -75,7 +75,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline \
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
-	backend-go-image backend-deploy \
+	backend-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy frontend-icons \
@@ -293,24 +293,24 @@ trigger-pipeline-via-scheduler:
 # *manifest* being tagged arm64 from an Apple Silicon machine — which Cloud
 # Run rejects. Context is backend/, not the repo root: the Go module is
 # self-contained, where the pipeline image needs the uv workspace above it.
-backend-go-image: $(BACKEND_GO_IMAGE_SENTINEL)
+backend-image: $(BACKEND_IMAGE_SENTINEL)
 
-$(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
+$(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
 	docker buildx build \
 	    --platform linux/amd64 \
 	    --push \
-	    --tag $(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG) \
+	    --tag $(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG) \
 	    --file backend/Dockerfile \
 	    backend
 	@mkdir -p $(dir $@) && touch $@
 
 # Roll out a new Cloud Run revision of the `backend` service. Cloud Run pins a
 # digest per revision and does not roll on image push, so run this after
-# `backend-go-image` to pick up code or promoted-model changes.
-backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
+# `backend-image` to pick up code or promoted-model changes.
+backend-deploy: $(BACKEND_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_SERVICE) \
 	    --region=$(REGION) \
-	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
+	    --image=$(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload
