@@ -9,7 +9,7 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/openmeteo"
+	"github.com/AndyHolt/will-it-rain/backend/internal/openmeteo"
 )
 
 // decode parses an Open-Meteo FlatBuffers payload into the canonical column map.

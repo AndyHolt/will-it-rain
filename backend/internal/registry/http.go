@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
+	"github.com/AndyHolt/will-it-rain/backend/internal/httpx"
 )
 
 // getJSON GETs endpoint and decodes the body into out. Transport behaviour —

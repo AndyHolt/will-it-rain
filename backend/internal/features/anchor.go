@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // PickAnchor returns the hour to predict from: the latest forecast hour at or

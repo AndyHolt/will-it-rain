@@ -38,7 +38,7 @@ services list` prints them.
 ```
 curl -s -o /dev/null \
     -w 'total=%{time_total}s ttfb=%{time_starttransfer}s\n' \
-    https://backend-go-icxxlsgqsa-nw.a.run.app/api/predict
+    https://backend-icxxlsgqsa-nw.a.run.app/api/predict
 ```
 
 **3. Read Cloud Run's own measurement back.** There is no `gcloud` read surface
@@ -50,7 +50,7 @@ is a raw REST call. The `date` invocations below are BSD (macOS); GNU is
 curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
   -G "https://monitoring.googleapis.com/v3/projects/will-it-rain-496308/timeSeries" \
   --data-urlencode 'filter=metric.type="run.googleapis.com/container/startup_latencies"
-                           AND resource.labels.service_name="backend-go"' \
+                           AND resource.labels.service_name="backend"' \
   --data-urlencode "interval.startTime=$(date -u -v-1H +%Y-%m-%dT%H:%M:%SZ)" \
   --data-urlencode "interval.endTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   | jq -r '.timeSeries[].points[] | select(.value.distributionValue.count != null)
@@ -70,6 +70,10 @@ service has only had three, because it has only existed for a day:
 |--------------|--------------|-----|--------|-----------------|
 | `backend`    | Python 3.14  |  28 | 33.8s  | 24.1s – 38.9s   |
 | `backend-go` | Go 1.26      |   3 | 0.45s  | 0.41s – 0.45s   |
+
+These are the two services as they stood during the migration. `backend-go` has
+since been destroyed and `backend` now runs the Go image, so the row that
+describes today's service is the second one.
 
 A **75x** reduction, and the spread collapses with it: the Python service
 varied by 15 seconds between cold starts, the Go one by 40 milliseconds.
@@ -114,6 +118,6 @@ green `backend-go` service it crossed on has been destroyed.
 Parity was answered by `make parity` / `scripts/parity.py`, which compared the
 two deployed services field by field. Both are deleted with the second service;
 `git log` has them if the comparison is ever wanted again. The Go module's
-golden-fixture tests (`backend-go/testdata`) still pin train/serve parity, which
+golden-fixture tests (`backend/testdata`) still pin train/serve parity, which
 is the part that outlives the migration. This document answers the second
 condition.

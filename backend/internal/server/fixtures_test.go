@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/registry"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/registry"
 )
 
 // This package's stake in the golden fixtures is the whole chain: the same

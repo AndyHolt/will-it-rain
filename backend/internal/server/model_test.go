@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/registry"
+	"github.com/AndyHolt/will-it-rain/backend/internal/registry"
 )
 
 // TestNewModelRejectsAnUnservableDecision covers the half of serving.json this

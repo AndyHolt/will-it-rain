@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // The two seasonal features build_features appends after the lags. They are

@@ -1,4 +1,4 @@
-module github.com/AndyHolt/will-it-rain/backend-go
+module github.com/AndyHolt/will-it-rain/backend
 
 go 1.26
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
+	"github.com/AndyHolt/will-it-rain/backend/internal/httpx"
 )
 
 // The two files save_serving_artefacts writes into the registry prefix

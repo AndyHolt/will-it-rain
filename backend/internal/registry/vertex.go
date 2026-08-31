@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
+	"github.com/AndyHolt/will-it-rain/backend/internal/httpx"
 )
 
 // ErrNoProductionModel reports that the registry holds no version aliased

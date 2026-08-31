@@ -12,7 +12,7 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/openmeteo"
+	"github.com/AndyHolt/will-it-rain/backend/internal/openmeteo"
 )
 
 // readTestdata reads one of the checked-in golden fixtures, which live at the
