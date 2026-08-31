@@ -6,7 +6,7 @@ Workflows under `.github/workflows/`:
 |----------------------|-----------------------------|--------------|
 | `prek.yml`           | PR + push to main           | prek hook set (ruff, ty, biome, gitleaks, …) |
 | `pytest.yml`         | PR + push to main           | `uv run pytest` across the workspace |
-| `go.yml`             | PR + push touching `backend-go/**` or `Makefile` | `make go-test` |
+| `go.yml`             | PR + push touching `backend/**` or `Makefile` | `make go-test` |
 | `terraform-plan.yml` | PR touching `infra/main/**` or `config.env` | `terraform plan`, no apply |
 | `deploy.yml`         | push to main                | path-filtered build + apply + deploy |
 
@@ -14,9 +14,9 @@ Workflows under `.github/workflows/`:
 
 Each job is gated on the path filter for its component:
 
-1. `changes` — dorny/paths-filter → `pipeline` / `backend_go` / `frontend` /
+1. `changes` — dorny/paths-filter → `pipeline` / `backend` / `frontend` /
    `infra` / `model_refresher` booleans.
-2. `build-pipeline-image`, `build-backend-go-image` —
+2. `build-pipeline-image`, `build-backend-image` —
    `docker buildx … --push :latest`.
 3. `compile-and-upload-pipeline` — `make compile-pipeline` + `make upload-pipeline`.
 4. `terraform-apply` — runs when pipeline, infra **or** model_refresher changed.
@@ -24,9 +24,8 @@ Each job is gated on the path filter for its component:
    Backend and frontend code changes don't alter TF state, so they don't
    trigger apply.
 5. `backend-deploy` — `gcloud run services update` against the
-   `backend-go:latest` tag `build-backend-go-image` just pushed. It gates on
-   `backend_go`, and is named for the service it updates rather than the image
-   it deploys.
+   `backend:latest` tag `build-backend-image` just pushed. It gates on
+   `backend`.
 6. `frontend-deploy` — `make frontend-site-check` + `make frontend-build` +
    `npx firebase-tools deploy --only hosting --project …`.
 
@@ -34,8 +33,8 @@ The deploy jobs call `gcloud` directly rather than `make backend-deploy`: that
 recipe depends on the image sentinel under `build/`, which doesn't exist on a
 fresh runner, so make would rebuild the image the build job just pushed.
 
-`backend_go`'s filter is narrower than `pipeline`'s — no
-`will_it_rain_shared/**`, no `pyproject.toml`, no `uv.lock`. `backend-go/` is a
+`backend`'s filter is narrower than `pipeline`'s — no
+`will_it_rain_shared/**`, no `pyproject.toml`, no `uv.lock`. `backend/` is a
 self-contained Go module and none of those are inputs to its image. Tests for
 it run in `go.yml`, not here; `deploy.yml` only builds and rolls it.
 

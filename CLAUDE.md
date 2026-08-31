@@ -16,7 +16,7 @@ Most of the layout reads fine from `ls`. These parts don't:
   Only the pipeline imports it now — the backend is Go and reimplements
   feature building and scoring — so the drift that would break predictions is
   cross-language. `golden_fixtures/` is what pins it: it computes expected
-  outputs through this package for `backend-go`'s tests to assert against.
+  outputs through this package for the Go backend's tests to assert against.
 - **`infra/bootstrap/` vs `infra/main/`** — project-level IAM for the terraform
   SA lives in bootstrap, and changes there need a manual
   `terraform -chdir=infra/bootstrap apply` as the human user. See
@@ -43,7 +43,7 @@ done; `make fix` applies every auto-fixer. Recipes are split `py-*` /
 Recipes that hit GCP are **deliberately absent from `make help`** so they aren't
 one tab-complete away, but they exist: `image`, `compile-pipeline`,
 `upload-pipeline`, `deploy-pipeline`, `trigger-pipeline-from-local`,
-`trigger-pipeline-via-scheduler`, `clean`, `backend-go-image`,
+`trigger-pipeline-via-scheduler`, `clean`, `backend-image`,
 `backend-deploy`, `frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the
 Makefile for the current set. `golden-fixtures` is hidden for a different
 reason — it needs no GCP, but it retrains a model and rewrites checked-in

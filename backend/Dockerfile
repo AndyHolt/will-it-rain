@@ -2,7 +2,7 @@
 #
 # Build context is backend/, not repo root.
 #
-# docker build -f backend/Dockerfile -t backend-go:latest backend
+# docker build -f backend/Dockerfile -t backend:latest backend
 
 # Pinned to the builder's own architecture so the toolchain cross-compiles
 # rather than the whole stage running under QEMU. Building `--platform
