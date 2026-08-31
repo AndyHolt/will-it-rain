@@ -196,21 +196,33 @@ prek: ## prek run --all-files
 # Local dev servers
 # ---------------------------------------------------------------------------
 #
-# Each restart re-downloads the @production .joblib from GCS. Requires gcloud
-# ADC (`gcloud auth application-default login`) for Vertex + GCS access.
+# Each restart re-resolves the @production model and re-downloads its artefacts
+# from GCS. Requires gcloud ADC (`gcloud auth application-default login`) for
+# Vertex + GCS access.
 #
-# PROJECT / LOCATION are what the app-side settings (and Cloud Run, and the
-# Vertex SDK) call these; config.env uses the Makefile / TF_VAR_ names. Neither
-# pair can rename without breaking the other side, so map them here — in
-# deployment Terraform sets the app-side names directly and nothing maps.
-backend-dev: ## reloading FastAPI server on $(BACKEND_DEV_PORT)
-	PROJECT=$(PROJECT_ID) LOCATION=$(REGION) \
-	    uv run --package backend uvicorn backend.main:app \
-	    --reload \
-	    --reload-dir backend/src \
-	    --reload-dir will_it_rain_shared/src \
-	    --host 127.0.0.1 \
-	    --port $(BACKEND_DEV_PORT)
+# LOCATION is what the service calls the region; config.env uses the Makefile /
+# TF_VAR_ name, so map it here. In deployment cloud_run.tf sets the service-side
+# name directly and nothing maps.
+#
+# PROJECT is passed too, though cloud_run.tf deliberately leaves it unset: on
+# Cloud Run the metadata server hands internal/registry a project through ADC,
+# but user ADC from `gcloud auth application-default login` often carries none,
+# and the service then refuses to start rather than guess. The env var is the
+# override the resolver checks first.
+#
+# LATITUDE / LONGITUDE come from the gitignored .env (see .env-example). The Go
+# binary reads the environment and nothing else — no dotenv support, because
+# that is a dev convenience and Cloud Run injects these directly — so source
+# .env here. `set -a` exports what it defines; the subshell keeps it out of the
+# rest of the build.
+#
+# No reload flag: there is no equivalent for a compiled binary, and `go run`
+# rebuilds this module in well under a second. Ctrl-C and re-run.
+backend-dev: ## Go prediction server on $(BACKEND_DEV_PORT)
+	@test -f .env || { echo ".env is missing — copy .env-example and fill it in"; exit 1; }
+	set -a; . ./.env; set +a; \
+	    PROJECT=$(PROJECT_ID) LOCATION=$(REGION) PORT=$(BACKEND_DEV_PORT) \
+	    go -C backend-go run ./cmd/server
 
 # Vite dev server with HMR. The vite config proxies /api/* to the backend at
 # 127.0.0.1:8080, so the frontend hits same-origin URLs and no CORS config is
