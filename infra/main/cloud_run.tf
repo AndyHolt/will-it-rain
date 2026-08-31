@@ -28,9 +28,7 @@ resource "google_cloud_run_v2_service" "backend" {
     }
 
     containers {
-      # The Go image. var.backend_image and the Python image it pointed at are
-      # removed with the rest of the Python backend; until then this is the one
-      # place that decides which of the two this service serves.
+      # Derived in variables.tf, or pinned to a per-commit tag by CI.
       image = local.backend_go_image
 
       ports {
