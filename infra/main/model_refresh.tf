@@ -170,7 +170,7 @@ resource "google_cloudfunctions2_function" "model_refresher" {
     # function.
     environment_variables = {
       PROJECT          = var.project_id
-      LOCATION         = var.region
+      REGION           = var.region
       BACKEND_SERVICES = google_cloud_run_v2_service.backend.name
     }
   }

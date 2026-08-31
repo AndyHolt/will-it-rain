@@ -43,13 +43,13 @@ def _parse_services(raw: str) -> tuple[str, ...]:
 
 
 PROJECT = os.environ["PROJECT"]
-LOCATION = os.environ["LOCATION"]
+REGION = os.environ["REGION"]
 BACKEND_SERVICES = _parse_services(os.environ.get("BACKEND_SERVICES", "backend"))
 REFRESH_ENV_VAR = "MODEL_REFRESH_AT"
 
 
 def _service_path(service: str) -> str:
-    return f"projects/{PROJECT}/locations/{LOCATION}/services/{service}"
+    return f"projects/{PROJECT}/locations/{REGION}/services/{service}"
 
 
 def _decode_message(event: CloudEvent) -> dict:
