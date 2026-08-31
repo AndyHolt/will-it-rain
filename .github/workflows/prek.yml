@@ -42,8 +42,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: backend-go/go.mod
-          cache-dependency-path: backend-go/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       - name: Run prek
         run: prek run --all-files --skip no-commit-to-branch --skip golangci-lint
@@ -51,4 +51,4 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          working-directory: backend-go
+          working-directory: backend
