@@ -1,15 +1,12 @@
 # ---------------------------------------------------------------------------
-# backend-go — the Go rewrite of the backend, running green beside the blue
-# Python `backend` service (cloud_run.tf) for the length of the migration.
+# backend-go — the green service of the Python-to-Go migration, and currently
+# the one Firebase Hosting rewrites to.
 # ---------------------------------------------------------------------------
 #
-# Nothing routes user traffic here: Firebase Hosting still rewrites to
-# `backend`. The service exists so the Go image can be validated against live
-# Vertex and GCS — parity of predictions, and the cold start the rewrite is
-# for — before hosting is flipped.
-#
-# At teardown this file is deleted and `backend` is repointed at the Go image
-# in place, so no service is ever destroyed and recreated.
+# It exists to carry traffic across the switch without either service being
+# destroyed and recreated. `backend` (cloud_run.tf) has now been repointed at
+# the same Go image in place; once it has been validated directly, hosting
+# flips back to it and this file — and with it this service — goes away.
 
 resource "google_cloud_run_v2_service" "backend_go" {
   name                = "backend-go"
@@ -39,9 +36,9 @@ resource "google_cloud_run_v2_service" "backend_go" {
       resources {
         limits = {
           cpu = "1"
-          # Half the Python service's 1Gi. There is no interpreter, no pandas
-          # and no scipy here; the resident set is the binary, a 156 KiB model
-          # and one forecast response.
+          # Half what the Python service ran on. There is no interpreter, no
+          # pandas and no scipy here; the resident set is the binary, a 156 KiB
+          # model and one forecast response.
           memory = "512Mi"
         }
         # Same reasoning as cloud_run.tf: request-based billing, and the
@@ -82,7 +79,7 @@ resource "google_cloud_run_v2_service" "backend_go" {
     }
   }
 
-  # Same reason as cloud_run.tf:84 — the refresher owns MODEL_REFRESH_AT, and
+  # Same reason as the matching block in cloud_run.tf — the refresher owns MODEL_REFRESH_AT, and
   # without this every apply would reset it and tear down the freshly-rolled
   # revision. Editing the env vars above therefore needs a follow-up
   # `gcloud run services update backend-go --update-env-vars=...`.

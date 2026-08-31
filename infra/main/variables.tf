@@ -73,9 +73,11 @@ variable "backend_image" {
   default     = null
 }
 
-# Same shape as backend_image, for the Go service that runs beside it during
-# the migration (cloud_run_go.tf). Goes away with that file at teardown, when
-# `backend` starts serving the Go image under var.backend_image.
+# Same shape as backend_image, and now what the `backend` service itself runs
+# (cloud_run.tf) as well as the green `backend-go` service beside it. It
+# outlives that service: the image stays named backend-go, after the source
+# directory that builds it. var.backend_image is the one that goes away, with
+# the Python backend.
 variable "backend_go_image" {
   type        = string
   description = "Container image (incl. tag) for the backend-go Cloud Run service. Override in CI to pin per-commit; null derives it from project_id and region."

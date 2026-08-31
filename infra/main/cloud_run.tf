@@ -1,3 +1,14 @@
+# ---------------------------------------------------------------------------
+# backend — the prediction service. It now serves the Go image built from
+# `backend-go/` rather than the Python one this file was written for.
+#
+# The repoint is an in-place update of this resource, not a new service, so the
+# name, URL, service account, IAM and model-refresher wiring are all unchanged.
+# Hosting still rewrites to `backend-go` at this point; it flips back here once
+# this service has been validated directly, and `backend-go` is destroyed after
+# that. Rollback until then is one line: `local.backend_image`.
+# ---------------------------------------------------------------------------
+
 resource "google_cloud_run_v2_service" "backend" {
   name                = "backend"
   location            = var.region
@@ -9,17 +20,19 @@ resource "google_cloud_run_v2_service" "backend" {
 
     scaling {
       # min=0: traffic is sporadic enough that a pinned warm instance was the
-      # single biggest line on the bill. The trade-off is the ~20s cold-start
-      # path (container boot + lightgbm/aiplatform imports + Vertex Model.list
-      # + GCS .joblib download) on the first request after an idle period.
-      # Baking the model into the image is the fix for that; until then, cold
-      # starts are accepted.
+      # single biggest line on the bill. That used to cost a ~20s cold start on
+      # the first request after an idle period, which is what the Go rewrite
+      # was for — the measured startup is now ~0.45s (docs/cold-start.md), so
+      # scale-to-zero no longer trades latency for cost.
       min_instance_count = 0
       max_instance_count = 3
     }
 
     containers {
-      image = local.backend_image
+      # The Go image. var.backend_image and the Python image it pointed at are
+      # removed with the rest of the Python backend; until then this is the one
+      # place that decides which of the two this service serves.
+      image = local.backend_go_image
 
       ports {
         container_port = 8080
@@ -27,8 +40,11 @@ resource "google_cloud_run_v2_service" "backend" {
 
       resources {
         limits = {
-          cpu    = "1"
-          memory = "1Gi"
+          cpu = "1"
+          # Halved from the Python service's 1Gi along with the image. There is
+          # no interpreter, no pandas and no scipy here; the resident set is the
+          # binary, a 156 KiB model and one forecast response.
+          memory = "512Mi"
         }
         # cpu_idle = true selects request-based billing: CPU and memory are
         # billed only while a request is in flight (plus startup), not for the
@@ -36,11 +52,17 @@ resource "google_cloud_run_v2_service" "backend" {
         # throttled between requests, which is fine — the service does no
         # background work outside request handling.
         cpu_idle = true
-        # Free during the startup window; doubles available CPU while
-        # imports + model load run.
+        # Free during the startup window; doubles available CPU while the
+        # concurrent champion fetch and forecast fetch run.
         startup_cpu_boost = true
       }
 
+      # PROJECT is inert for the Go binary, which resolves the project from the
+      # ADC the metadata server hands it (internal/registry) and only consults
+      # this as an override. Left set rather than deleted because the lifecycle
+      # block below means removing it here would not remove it from the running
+      # service — that needs a `gcloud run services update --remove-env-vars`,
+      # and it rides along with the LOCATION -> REGION rename that does the same.
       env {
         name  = "PROJECT"
         value = var.project_id
