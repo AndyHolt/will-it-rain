@@ -23,17 +23,16 @@ Each job is gated on the path filter for its component:
    Waits on the upload because `scheduler.tf` reads the GCS YAML at plan time.
    Backend and frontend code changes don't alter TF state, so they don't
    trigger apply.
-5. `backend-deploy`, `backend-go-deploy` — `gcloud run services update` against
-   the `backend-go:latest` tag `build-backend-go-image` just pushed. Both
-   services run that image, so both jobs gate on `backend_go`; `backend-deploy`
-   named for the service it updates, not for the image it deploys.
+5. `backend-deploy` — `gcloud run services update` against the
+   `backend-go:latest` tag `build-backend-go-image` just pushed. It gates on
+   `backend_go`, and is named for the service it updates rather than the image
+   it deploys.
 6. `frontend-deploy` — `make frontend-site-check` + `make frontend-build` +
    `npx firebase-tools deploy --only hosting --project …`.
 
-The deploy jobs call `gcloud` directly rather than `make backend-deploy` /
-`make backend-go-deploy`: those recipes depend on the image sentinel under
-`build/`, which doesn't exist on a fresh runner, so make would rebuild the
-image the build job just pushed.
+The deploy jobs call `gcloud` directly rather than `make backend-deploy`: that
+recipe depends on the image sentinel under `build/`, which doesn't exist on a
+fresh runner, so make would rebuild the image the build job just pushed.
 
 `backend_go`'s filter is narrower than `backend`'s — no `will_it_rain_shared/**`,
 no `pyproject.toml`, no `uv.lock`. `backend-go/` is a self-contained Go module

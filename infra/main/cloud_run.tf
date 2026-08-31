@@ -2,11 +2,10 @@
 # backend — the prediction service. It now serves the Go image built from
 # `backend-go/` rather than the Python one this file was written for.
 #
-# The repoint is an in-place update of this resource, not a new service, so the
-# name, URL, service account, IAM and model-refresher wiring are all unchanged.
-# Hosting still rewrites to `backend-go` at this point; it flips back here once
-# this service has been validated directly, and `backend-go` is destroyed after
-# that. Rollback until then is one line: `local.backend_image`.
+# The repoint was an in-place update of this resource, not a new service, so the
+# name, URL, service account, IAM and model-refresher wiring never changed.
+# `backend-go`, the green service traffic crossed on, is gone; hosting rewrites
+# here again and this is once more the only prediction service.
 # ---------------------------------------------------------------------------
 
 resource "google_cloud_run_v2_service" "backend" {

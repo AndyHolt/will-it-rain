@@ -153,25 +153,25 @@ resource "google_cloudfunctions2_function" "model_refresher" {
     max_instance_count = 1
     available_memory   = "256M"
 
-    # The function waits for each rollout to *complete*, not merely to be
-    # accepted, so its runtime is the sum of the services' startup times — and
-    # `backend` takes ~35s to become ready (docs/cold-start.md). 300s leaves
-    # room for both services plus a slow image pull.
+    # The function waits for the rollout to *complete*, not merely to be
+    # accepted, so its runtime is the service's startup time. That is ~0.45s of
+    # container start now `backend` serves the Go image (docs/cold-start.md),
+    # but a revision rollout is dominated by Cloud Run's own admission and
+    # health-check path, not by the binary. 300s is headroom for a slow image
+    # pull, and is left where the two-service migration set it.
     timeout_seconds       = 300
     service_account_email = google_service_account.refresher.email
 
     # BACKEND_SERVICES is comma-separated: the function refreshes every
-    # service named. Both backends are listed for the length of the blue/green
-    # migration, so a promotion reaches whichever one hosting points at, and
-    # the green service is never validated against a model the blue one has
-    # moved past. Teardown drops backend-go and leaves a single name.
+    # service named. The blue/green migration listed both backends here; now
+    # that hosting is back on `backend` and backend-go is being torn down,
+    # there is one again. The plural stays because the function's contract is a
+    # list — adding a second service is an edit here, not a change to the
+    # function.
     environment_variables = {
-      PROJECT  = var.project_id
-      LOCATION = var.region
-      BACKEND_SERVICES = join(",", [
-        google_cloud_run_v2_service.backend.name,
-        google_cloud_run_v2_service.backend_go.name,
-      ])
+      PROJECT          = var.project_id
+      LOCATION         = var.region
+      BACKEND_SERVICES = google_cloud_run_v2_service.backend.name
     }
   }
 
