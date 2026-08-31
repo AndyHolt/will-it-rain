@@ -1,8 +1,8 @@
 name: deploy
 
 # Single deploy workflow on merge to main. Path-filtered: each component
-# (pipeline, backend, backend-go, frontend, infra) only builds / deploys when
-# its inputs changed. Auth is via the bootstrap WIF provider impersonating the
+# (pipeline, backend-go, frontend, infra) only builds / deploys when its
+# inputs changed. Auth is via the bootstrap WIF provider impersonating the
 # terraform SA — see infra/bootstrap/main.tf for the role set.
 
 on:
@@ -29,13 +29,12 @@ jobs:
   # ---------------------------------------------------------------------------
   # Determine which components changed in this push. Each downstream job gates
   # on the corresponding output. Shared library + workspace lockfile changes
-  # bust both the pipeline and backend images (they're in both images).
+  # bust the pipeline image, which is the only image they are baked into.
   # ---------------------------------------------------------------------------
   changes:
     runs-on: ubuntu-latest
     outputs:
       pipeline: ${{ steps.filter.outputs.pipeline }}
-      backend: ${{ steps.filter.outputs.backend }}
       backend_go: ${{ steps.filter.outputs.backend_go }}
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
@@ -57,16 +56,9 @@ jobs:
               - 'uv.lock'
               - 'Makefile'
               - 'config.env'
-            backend:
-              - 'backend/**'
-              - 'will_it_rain_shared/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'Makefile'
-              - 'config.env'
-            # Narrower than `backend` on purpose: backend-go is a self-contained
-            # Go module with its own go.mod, so neither will_it_rain_shared nor
-            # the uv lockfile is an input to its image.
+            # Narrower than `pipeline` on purpose: backend-go is a
+            # self-contained Go module with its own go.mod, so neither
+            # will_it_rain_shared nor the uv lockfile is an input to its image.
             backend_go:
               - 'backend-go/**'
               - 'Makefile'
@@ -103,24 +95,6 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: Build and push pipeline image
         run: make image
-
-  build-backend-image:
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/load-config
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Configure Docker credential helper for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-      - uses: docker/setup-buildx-action@v3
-      - name: Build and push backend image
-        run: make backend-image
 
   build-backend-go-image:
     needs: changes
@@ -193,8 +167,8 @@ jobs:
   #   - infra HCL changed (resource shape), or
   #   - pipeline changed (scheduler.tf reads the freshly-uploaded YAML), or
   #   - model_refresher changed (model_refresh.tf reads the freshly-uploaded zip).
-  # Backend/frontend code changes don't change TF state (both backend images
-  # are pinned to :latest in TF, deployed revisions come from the deploy jobs
+  # Backend/frontend code changes don't change TF state (the backend image is
+  # pinned to :latest in TF, deployed revisions come from the deploy jobs
   # below). The image builds are still gates: applying a service against a tag
   # whose push has just failed would pin the revision to a stale digest.
   # ---------------------------------------------------------------------------
@@ -205,7 +179,6 @@ jobs:
         compile-and-upload-pipeline,
         upload-model-refresher-source,
         build-pipeline-image,
-        build-backend-image,
         build-backend-go-image,
       ]
     if: |
@@ -214,7 +187,6 @@ jobs:
       (needs.compile-and-upload-pipeline.result == 'success' || needs.compile-and-upload-pipeline.result == 'skipped') &&
       (needs.upload-model-refresher-source.result == 'success' || needs.upload-model-refresher-source.result == 'skipped') &&
       (needs.build-pipeline-image.result == 'success' || needs.build-pipeline-image.result == 'skipped') &&
-      (needs.build-backend-image.result == 'success' || needs.build-backend-image.result == 'skipped') &&
       (needs.build-backend-go-image.result == 'success' || needs.build-backend-go-image.result == 'skipped')
     runs-on: ubuntu-latest
     env:
@@ -241,15 +213,11 @@ jobs:
   # Roll forward Cloud Run + Firebase Hosting. Both wait on terraform-apply
   # (which may be skipped on a code-only change — handled in `if`).
   # ---------------------------------------------------------------------------
-  # The `backend` service runs the Go image (cloud_run.tf), so this job's
-  # inputs are the Go ones: it gates on `backend_go` and waits on
-  # build-backend-go-image. It deployed the Python image until that repoint,
-  # and gating on `backend` after it would have pushed Python back over the Go
-  # revision on any uv.lock / pyproject.toml / Makefile change.
-  #
-  # `backend/**` and `will_it_rain_shared/**` therefore deploy nothing now. No
-  # service runs the Python image; build-backend-image still builds it, and
-  # goes when the Python backend does.
+  # The `backend` service runs the Go image (cloud_run.tf), so this job gates
+  # on `backend_go` and waits on build-backend-go-image. `will_it_rain_shared`
+  # is no longer one of its inputs: nothing it changes reaches the serving
+  # path, which is now the Go module's own reimplementation, pinned to the
+  # Python one by the golden fixtures in backend-go/testdata.
   backend-deploy:
     needs: [changes, build-backend-go-image, terraform-apply]
     if: |
