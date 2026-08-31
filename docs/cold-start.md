@@ -106,7 +106,14 @@ Python first.
 
 ## The cutover gate
 
-Two conditions have to hold before Firebase Hosting is pointed at the Go
-service: prediction parity within `1e-9`, and cold start under ~1s.
-`make parity` answers the first (see `scripts/parity.py`); this document
-answers the second. Both hold.
+Two conditions had to hold before Firebase Hosting was pointed at the Go
+service: prediction parity within `1e-9`, and cold start under ~1s. Both held,
+and the cutover is done — the `backend` service serves the Go image and the
+green `backend-go` service it crossed on has been destroyed.
+
+Parity was answered by `make parity` / `scripts/parity.py`, which compared the
+two deployed services field by field. Both are deleted with the second service;
+`git log` has them if the comparison is ever wanted again. The Go module's
+golden-fixture tests (`backend-go/testdata`) still pin train/serve parity, which
+is the part that outlives the migration. This document answers the second
+condition.

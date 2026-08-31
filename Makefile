@@ -32,7 +32,6 @@ BACKEND_IMAGE_TAG     ?= latest
 BACKEND_SERVICE       := backend
 BACKEND_GO_IMAGE_NAME := backend-go
 BACKEND_GO_IMAGE_TAG  ?= latest
-BACKEND_GO_SERVICE    := backend-go
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
 BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
@@ -87,8 +86,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	image compile-pipeline upload-pipeline deploy-pipeline \
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
 	backend-image backend-deploy \
-	backend-go-image backend-go-deploy \
-	parity \
+	backend-go-image \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy frontend-icons \
@@ -306,9 +304,6 @@ $(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
 # depends on — deploying $(BACKEND_IMAGE_NAME) here would put the Python
 # backend back on the live service. Use it after `backend-go-image` to pick up
 # code or promoted-model changes.
-#
-# It differs from `backend-go-deploy` only in which service it targets; the two
-# collapse into one when backend-go is destroyed.
 backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_SERVICE) \
 	    --region=$(REGION) \
@@ -333,37 +328,6 @@ $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
 	    --file backend-go/Dockerfile \
 	    backend-go
 	@mkdir -p $(dir $@) && touch $@
-
-# Roll out a new revision of the backend-go service. Same reasoning as
-# `backend-deploy`: Cloud Run revisions pin a digest, so a pushed image does
-# not reach traffic on its own.
-#
-# The service itself is Terraform's (cloud_run_go.tf), and defaults to the
-# :latest tag — so `backend-go-image` has to have pushed one before that
-# service can first be applied.
-backend-go-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
-	gcloud run services update $(BACKEND_GO_SERVICE) \
-	    --region=$(REGION) \
-	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
-
-# ---------------------------------------------------------------------------
-# Migration verification
-# ---------------------------------------------------------------------------
-
-# Compare the deployed backend and backend-go answers field by field. The
-# gate on flipping Firebase Hosting to the Go service; docs/cold-start.md is
-# the other half of that verification.
-#
-# Hidden from `make help` with the rest of the recipes that reach GCP.
-# PARITY_ARGS passes through the script's own flags, e.g.
-#     make parity PARITY_ARGS="--samples 3"
-PARITY_ARGS ?=
-
-parity:
-	uv run --script scripts/parity.py \
-	    --project $(PROJECT_ID) \
-	    --region $(REGION) \
-	    $(PARITY_ARGS)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload
