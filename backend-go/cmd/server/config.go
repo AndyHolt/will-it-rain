@@ -16,8 +16,8 @@ const defaultPort = "8080"
 // The GCP project is deliberately absent: internal/registry resolves it from
 // Application Default Credentials, so the binary has no project compiled into
 // it and runs unmodified in any of them. The region cannot be resolved that
-// way — ADC carries a project and never a location — so LOCATION stays
-// injected, which cloud_run.tf already does.
+// way — ADC carries a project and never a region — so REGION stays injected,
+// which cloud_run.tf already does.
 type config struct {
 	latitude  float64
 	longitude float64
@@ -33,7 +33,7 @@ type config struct {
 // one.
 func loadConfig() (config, error) {
 	cfg := config{
-		region:           os.Getenv("LOCATION"),
+		region:           os.Getenv("REGION"),
 		modelDisplayName: os.Getenv("MODEL_DISPLAY_NAME"),
 		port:             os.Getenv("PORT"),
 	}
@@ -46,7 +46,7 @@ func loadConfig() (config, error) {
 		return config{}, err
 	}
 	if cfg.region == "" {
-		return config{}, errors.New("LOCATION is not set: it is the Vertex region, e.g. europe-west2")
+		return config{}, errors.New("REGION is not set: it is the Vertex region, e.g. europe-west2")
 	}
 	if cfg.port == "" {
 		cfg.port = defaultPort

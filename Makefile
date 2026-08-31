@@ -27,14 +27,11 @@ ARTEFACTS_BUCKET      := $(PROJECT_ID)-model-artefacts
 IMAGE_REPO            := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/will-it-rain-images
 IMAGE_NAME            := pipeline
 IMAGE_TAG             ?= latest
-BACKEND_IMAGE_NAME    := backend
-BACKEND_IMAGE_TAG     ?= latest
 BACKEND_SERVICE       := backend
 BACKEND_GO_IMAGE_NAME := backend-go
 BACKEND_GO_IMAGE_TAG  ?= latest
 PIPELINE_SPEC         := build/pipeline.yaml
 IMAGE_SENTINEL        := build/.image-pushed
-BACKEND_IMAGE_SENTINEL := build/.backend-image-pushed
 BACKEND_GO_IMAGE_SENTINEL := build/.backend-go-image-pushed
 BACKEND_DEV_PORT       ?= 8080
 
@@ -49,17 +46,10 @@ IMAGE_SOURCES    := pipeline/Dockerfile \
 		    $(shell find pipeline/src -name '*.py') \
 		    $(shell find will_it_rain_shared/src -name '*.py')
 
-BACKEND_IMAGE_SOURCES := backend/Dockerfile \
-			 pyproject.toml uv.lock \
-			 backend/pyproject.toml \
-			 will_it_rain_shared/pyproject.toml \
-			 $(shell find backend/src -name '*.py') \
-			 $(shell find will_it_rain_shared/src -name '*.py')
-
-# Files baked into the Go backend image. Tests are excluded deliberately:
-# they are in the build context but never in the image, so a test-only edit
-# would otherwise push a byte-identical binary under a fresh digest. The
-# equivalent Python lists get this for free from the src/ vs tests/ split.
+# Files baked into the backend image. Tests are excluded deliberately: they
+# are in the build context but never in the image, so a test-only edit would
+# otherwise push a byte-identical binary under a fresh digest. The pipeline
+# list above gets this for free from the src/ vs tests/ split.
 BACKEND_GO_IMAGE_SOURCES := backend-go/Dockerfile backend-go/.dockerignore \
 			    backend-go/go.mod backend-go/go.sum \
 			    $(shell find backend-go/cmd backend-go/internal \
@@ -85,8 +75,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 	backend-dev frontend-dev dev \
 	image compile-pipeline upload-pipeline deploy-pipeline \
 	trigger-pipeline-from-local trigger-pipeline-via-scheduler clean \
-	backend-image backend-deploy \
-	backend-go-image \
+	backend-go-image backend-deploy \
 	model-refresher-source upload-model-refresher-source \
 	golden-fixtures \
 	frontend-build frontend-site-check frontend-deploy frontend-icons \
@@ -96,10 +85,11 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 # Dev tooling
 # ---------------------------------------------------------------------------
 #
-# Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, backend,
-# shared library. Frontend tooling (biome, tsc) covers the TypeScript workspace
-# under frontend/. Go tooling (gofmt, vet, go test) covers the module under
-# backend-go/. `check` and `fix` aggregate all three.
+# Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, shared
+# library, model refresher, golden fixtures. Frontend tooling (biome, tsc)
+# covers the TypeScript workspace under frontend/. Go tooling (gofmt, vet, go
+# test) covers the backend module under backend-go/. `check` and `fix`
+# aggregate all three.
 
 # Print available targets (anything whose recipe line carries a `## doc`).
 help:
@@ -196,21 +186,33 @@ prek: ## prek run --all-files
 # Local dev servers
 # ---------------------------------------------------------------------------
 #
-# Each restart re-downloads the @production .joblib from GCS. Requires gcloud
-# ADC (`gcloud auth application-default login`) for Vertex + GCS access.
+# Each restart re-resolves the @production model and re-downloads its artefacts
+# from GCS. Requires gcloud ADC (`gcloud auth application-default login`) for
+# Vertex + GCS access.
 #
-# PROJECT / LOCATION are what the app-side settings (and Cloud Run, and the
-# Vertex SDK) call these; config.env uses the Makefile / TF_VAR_ names. Neither
-# pair can rename without breaking the other side, so map them here — in
-# deployment Terraform sets the app-side names directly and nothing maps.
-backend-dev: ## reloading FastAPI server on $(BACKEND_DEV_PORT)
-	PROJECT=$(PROJECT_ID) LOCATION=$(REGION) \
-	    uv run --package backend uvicorn backend.main:app \
-	    --reload \
-	    --reload-dir backend/src \
-	    --reload-dir will_it_rain_shared/src \
-	    --host 127.0.0.1 \
-	    --port $(BACKEND_DEV_PORT)
+# REGION passes straight through: the service, config.env and the TF_VAR_ all
+# call it the same thing now, so nothing maps. cloud_run.tf sets it directly in
+# deployment.
+#
+# PROJECT is passed too, though cloud_run.tf leaves it unset: on Cloud Run the
+# metadata server hands internal/registry a project through ADC, but user ADC
+# from `gcloud auth application-default login` often carries none, and the
+# service then refuses to start rather than guess. The env var is the override
+# the resolver checks first.
+#
+# LATITUDE / LONGITUDE come from the gitignored .env (see .env-example). The Go
+# binary reads the environment and nothing else — no dotenv support, because
+# that is a dev convenience and Cloud Run injects these directly — so source
+# .env here. `set -a` exports what it defines; the subshell keeps it out of the
+# rest of the build.
+#
+# No reload flag: there is no equivalent for a compiled binary, and `go run`
+# rebuilds this module in well under a second. Ctrl-C and re-run.
+backend-dev: ## Go prediction server on $(BACKEND_DEV_PORT)
+	@test -f .env || { echo ".env is missing — copy .env-example and fill it in"; exit 1; }
+	set -a; . ./.env; set +a; \
+	    PROJECT=$(PROJECT_ID) REGION=$(REGION) PORT=$(BACKEND_DEV_PORT) \
+	    go -C backend-go run ./cmd/server
 
 # Vite dev server with HMR. The vite config proxies /api/* to the backend at
 # 127.0.0.1:8080, so the frontend hits same-origin URLs and no CORS config is
@@ -286,38 +288,11 @@ trigger-pipeline-via-scheduler:
 # Backend build / deploy
 # ---------------------------------------------------------------------------
 
-# Build and push the backend image. Same cross-compile reasoning as `image`:
-# Cloud Run runs x86_64.
-backend-image: $(BACKEND_IMAGE_SENTINEL)
-
-$(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
-	docker buildx build \
-	    --platform linux/amd64 \
-	    --push \
-	    --tag $(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG) \
-	    --file backend/Dockerfile \
-	    .
-	@mkdir -p $(dir $@) && touch $@
-
-# Roll out a new Cloud Run revision of the `backend` service. It serves the Go
-# image (cloud_run.tf), so that is the image this pushes and the sentinel it
-# depends on — deploying $(BACKEND_IMAGE_NAME) here would put the Python
-# backend back on the live service. Use it after `backend-go-image` to pick up
-# code or promoted-model changes.
-backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
-	gcloud run services update $(BACKEND_SERVICE) \
-	    --region=$(REGION) \
-	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
-
-# ---------------------------------------------------------------------------
-# Go backend build / deploy
-# ---------------------------------------------------------------------------
-
-# Build and push the Go backend image. The Dockerfile cross-compiles to
-# amd64 whatever it is built on, but the --platform flag is still what stops
-# the *manifest* being tagged arm64 from an Apple Silicon machine — which
-# Cloud Run rejects. Context is backend-go/, not the repo root: the Go module
-# is self-contained, where backend/ needs the uv workspace above it.
+# Build and push the backend image. The Dockerfile cross-compiles to amd64
+# whatever it is built on, but the --platform flag is still what stops the
+# *manifest* being tagged arm64 from an Apple Silicon machine — which Cloud
+# Run rejects. Context is backend-go/, not the repo root: the Go module is
+# self-contained, where the pipeline image needs the uv workspace above it.
 backend-go-image: $(BACKEND_GO_IMAGE_SENTINEL)
 
 $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
@@ -328,6 +303,14 @@ $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
 	    --file backend-go/Dockerfile \
 	    backend-go
 	@mkdir -p $(dir $@) && touch $@
+
+# Roll out a new Cloud Run revision of the `backend` service. Cloud Run pins a
+# digest per revision and does not roll on image push, so run this after
+# `backend-go-image` to pick up code or promoted-model changes.
+backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
+	gcloud run services update $(BACKEND_SERVICE) \
+	    --region=$(REGION) \
+	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
 
 # ---------------------------------------------------------------------------
 # Model-refresher build / upload

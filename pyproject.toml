@@ -10,7 +10,6 @@ dependencies = []
 members = [
     "will_it_rain_shared",
     "pipeline",
-    "backend",
     "model_refresher",
     "golden_fixtures",
 ]

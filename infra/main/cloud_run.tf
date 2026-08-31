@@ -28,9 +28,7 @@ resource "google_cloud_run_v2_service" "backend" {
     }
 
     containers {
-      # The Go image. var.backend_image and the Python image it pointed at are
-      # removed with the rest of the Python backend; until then this is the one
-      # place that decides which of the two this service serves.
+      # Derived in variables.tf, or pinned to a per-commit tag by CI.
       image = local.backend_go_image
 
       ports {
@@ -56,18 +54,18 @@ resource "google_cloud_run_v2_service" "backend" {
         startup_cpu_boost = true
       }
 
-      # PROJECT is inert for the Go binary, which resolves the project from the
-      # ADC the metadata server hands it (internal/registry) and only consults
-      # this as an override. Left set rather than deleted because the lifecycle
-      # block below means removing it here would not remove it from the running
-      # service — that needs a `gcloud run services update --remove-env-vars`,
-      # and it rides along with the LOCATION -> REGION rename that does the same.
+      # REGION is the one piece of deployment config the service cannot
+      # discover for itself: the ADC the metadata server hands it carries a
+      # project but never a region. PROJECT is deliberately absent for the
+      # opposite reason — internal/registry reads it only as an override, and
+      # on Cloud Run ADC already answers it.
+      #
+      # The lifecycle block below ignores the whole env block, so an edit here
+      # changes the declared state and nothing on the running service. Adding,
+      # renaming or removing a variable needs a matching `gcloud run services
+      # update backend --update-env-vars=... / --remove-env-vars=...`.
       env {
-        name  = "PROJECT"
-        value = var.project_id
-      }
-      env {
-        name  = "LOCATION"
+        name  = "REGION"
         value = var.region
       }
       env {

@@ -34,10 +34,10 @@ func TestNewRequiresRegion(t *testing.T) {
 	if err == nil {
 		t.Fatal("New succeeded without a region, want error")
 	}
-	// The message has to name the env var, not just the field: LOCATION is
+	// The message has to name the env var, not just the field: REGION is
 	// what an operator sets.
-	if !strings.Contains(err.Error(), "LOCATION") {
-		t.Errorf("error %q does not mention LOCATION", err)
+	if !strings.Contains(err.Error(), "REGION") {
+		t.Errorf("error %q does not mention REGION", err)
 	}
 }
 

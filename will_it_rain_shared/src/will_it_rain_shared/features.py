@@ -1,8 +1,10 @@
 """Feature building for will-it-rain.
 
-The single source of truth for feature construction. Imported by both the
-training pipeline and the serving backend; drift here would silently break
-predictions.
+The single source of truth for feature construction on the Python side. The
+serving backend is Go and rebuilds these features in ``internal/features``, so
+the drift that would silently break predictions is now cross-language.
+``golden_fixtures/`` is what pins the two together: it computes expected
+outputs through this module for the Go tests to assert against.
 """
 
 from collections.abc import Sequence

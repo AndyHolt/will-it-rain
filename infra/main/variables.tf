@@ -67,31 +67,19 @@ variable "model_display_name" {
 # Defaults to the :latest image in this project's Artifact Registry repo. That
 # can't be written as `default = "${var.region}-…"` — a variable default must be
 # a constant expression — so it's null here and derived in the local below.
-variable "backend_image" {
-  type        = string
-  description = "Container image (incl. tag) for the Cloud Run backend. Override in CI to pin per-commit; null derives it from project_id and region."
-  default     = null
-}
-
-# Same shape as backend_image, and now what the `backend` service itself runs
-# (cloud_run.tf) as well as the green `backend-go` service beside it. It
-# outlives that service: the image stays named backend-go, after the source
-# directory that builds it. var.backend_image is the one that goes away, with
-# the Python backend.
+#
+# Named for the image, which is `backend-go` after the source directory that
+# builds it, not for the service it runs on, which is `backend`. The Python
+# `backend` image and the var that pointed at it are gone.
 variable "backend_go_image" {
   type        = string
-  description = "Container image (incl. tag) for the backend-go Cloud Run service. Override in CI to pin per-commit; null derives it from project_id and region."
+  description = "Container image (incl. tag) for the backend Cloud Run service. Override in CI to pin per-commit; null derives it from project_id and region."
   default     = null
 }
 
 locals {
-  # coalesce skips null, so an explicit var.backend_image (CI pinning a
+  # coalesce skips null, so an explicit var.backend_go_image (CI pinning a
   # per-commit tag) still wins over the derived default.
-  backend_image = coalesce(
-    var.backend_image,
-    "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend:latest",
-  )
-
   backend_go_image = coalesce(
     var.backend_go_image,
     "${var.region}-docker.pkg.dev/${var.project_id}/will-it-rain-images/backend-go:latest",
