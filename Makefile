@@ -50,9 +50,9 @@ IMAGE_SOURCES    := pipeline/Dockerfile \
 # are in the build context but never in the image, so a test-only edit would
 # otherwise push a byte-identical binary under a fresh digest. The pipeline
 # list above gets this for free from the src/ vs tests/ split.
-BACKEND_GO_IMAGE_SOURCES := backend-go/Dockerfile backend-go/.dockerignore \
-			    backend-go/go.mod backend-go/go.sum \
-			    $(shell find backend-go/cmd backend-go/internal \
+BACKEND_GO_IMAGE_SOURCES := backend/Dockerfile backend/.dockerignore \
+			    backend/go.mod backend/go.sum \
+			    $(shell find backend/cmd backend/internal \
 					-name '*.go' -not -name '*_test.go')
 
 # Files baked into the model-refresher zip. Same staged-artifact pattern as
@@ -88,7 +88,7 @@ MODEL_REFRESHER_SOURCES    := $(shell find $(MODEL_REFRESHER_SOURCE_DIR) -type f
 # Python tooling (ruff, ty, pytest) covers the uv workspace: pipeline, shared
 # library, model refresher, golden fixtures. Frontend tooling (biome, tsc)
 # covers the TypeScript workspace under frontend/. Go tooling (gofmt, vet, go
-# test) covers the backend module under backend-go/. `check` and `fix`
+# test) covers the backend module under backend/. `check` and `fix`
 # aggregate all three.
 
 # Print available targets (anything whose recipe line carries a `## doc`).
@@ -145,7 +145,7 @@ frontend-format: ## biome format --write
 frontend-fix: ## biome check --write (lint + format)
 	pnpm -C frontend check:fix
 
-# Go — read-only checks over the backend-go module. `go -C` keeps these
+# Go — read-only checks over the backend module. `go -C` keeps these
 # runnable from the repo root, the same way `pnpm -C` does for the frontend.
 #
 # golangci-lint is deliberately absent: it is wired into the prek hooks and
@@ -153,22 +153,22 @@ frontend-fix: ## biome check --write (lint + format)
 # an unmanaged binary that `make check` would then require everyone to have
 # installed. `make prek` is the recipe that runs it.
 go-format-check: ## gofmt -s -l, no writes
-	@unformatted=$$(gofmt -s -l backend-go); \
+	@unformatted=$$(gofmt -s -l backend); \
 	if [ -n "$$unformatted" ]; then \
 		echo "gofmt -s needed:"; echo "$$unformatted"; exit 1; \
 	fi
 
 go-vet: ## go vet (suspicious constructs)
-	go -C backend-go vet ./...
+	go -C backend vet ./...
 
 go-test: ## go test across the module
-	go -C backend-go test ./...
+	go -C backend test ./...
 
 go-check: go-format-check go-vet go-test ## all Go read-only checks
 
 # Go — auto-fixers (mutate the working tree). Matches the prek gofmt hook.
 go-format: ## gofmt -s (writes)
-	gofmt -s -w backend-go
+	gofmt -s -w backend
 
 go-fix: go-format ## all Go auto-fixers
 
@@ -212,7 +212,7 @@ backend-dev: ## Go prediction server on $(BACKEND_DEV_PORT)
 	@test -f .env || { echo ".env is missing — copy .env-example and fill it in"; exit 1; }
 	set -a; . ./.env; set +a; \
 	    PROJECT=$(PROJECT_ID) REGION=$(REGION) PORT=$(BACKEND_DEV_PORT) \
-	    go -C backend-go run ./cmd/server
+	    go -C backend run ./cmd/server
 
 # Vite dev server with HMR. The vite config proxies /api/* to the backend at
 # 127.0.0.1:8080, so the frontend hits same-origin URLs and no CORS config is
@@ -291,7 +291,7 @@ trigger-pipeline-via-scheduler:
 # Build and push the backend image. The Dockerfile cross-compiles to amd64
 # whatever it is built on, but the --platform flag is still what stops the
 # *manifest* being tagged arm64 from an Apple Silicon machine — which Cloud
-# Run rejects. Context is backend-go/, not the repo root: the Go module is
+# Run rejects. Context is backend/, not the repo root: the Go module is
 # self-contained, where the pipeline image needs the uv workspace above it.
 backend-go-image: $(BACKEND_GO_IMAGE_SENTINEL)
 
@@ -300,8 +300,8 @@ $(BACKEND_GO_IMAGE_SENTINEL): $(BACKEND_GO_IMAGE_SOURCES)
 	    --platform linux/amd64 \
 	    --push \
 	    --tag $(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG) \
-	    --file backend-go/Dockerfile \
-	    backend-go
+	    --file backend/Dockerfile \
+	    backend
 	@mkdir -p $(dir $@) && touch $@
 
 # Roll out a new Cloud Run revision of the `backend` service. Cloud Run pins a
@@ -340,7 +340,7 @@ clean:
 # Generate what the Go backend's parity tests assert against: a locally
 # trained model (model.txt, serving.json), one raw Open-Meteo FlatBuffers
 # response (forecast.fb), and the outputs the Python serving path produces
-# from the two (expected.json), written to backend-go/testdata and checked in.
+# from the two (expected.json), written to backend/testdata and checked in.
 #
 # No GCP: the model is trained here over a fixed date window rather than
 # downloaded from the registry, so this needs no credentials and isn't gated

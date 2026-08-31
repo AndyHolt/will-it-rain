@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/httpx"
+	"github.com/AndyHolt/will-it-rain/backend/internal/httpx"
 )
 
 const currentForecastBaseURL = "https://api.open-meteo.com/v1/forecast"

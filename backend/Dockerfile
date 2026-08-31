@@ -1,8 +1,8 @@
 # Cloud Run image for the Go backend.
 #
-# Build context is backend-go/, not repo root.
+# Build context is backend/, not repo root.
 #
-# docker build -f backend-go/Dockerfile -t backend-go:latest backend-go
+# docker build -f backend/Dockerfile -t backend-go:latest backend
 
 # Pinned to the builder's own architecture so the toolchain cross-compiles
 # rather than the whole stage running under QEMU. Building `--platform

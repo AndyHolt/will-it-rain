@@ -7,10 +7,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/features"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/predict"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/registry"
+	"github.com/AndyHolt/will-it-rain/backend/internal/features"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/predict"
+	"github.com/AndyHolt/will-it-rain/backend/internal/registry"
 )
 
 // Model is the @production version this instance serves: a champion's two

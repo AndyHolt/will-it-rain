@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // Missing accounts for the NaNs in the vector Vector assembles, sorted into

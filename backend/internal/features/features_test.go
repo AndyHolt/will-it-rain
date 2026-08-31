@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // This is the parity assertion the package exists to satisfy: the captured

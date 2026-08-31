@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/registry"
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/server"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/registry"
+	"github.com/AndyHolt/will-it-rain/backend/internal/server"
 )
 
 const (

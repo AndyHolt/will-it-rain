@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // recordLogs returns a logger and a reader of what it captured, so the report

@@ -10,4 +10,4 @@ from pathlib import Path
 
 # Fixtures live beside the Go code that consumes them; `testdata` is the name
 # the Go toolchain already excludes from builds.
-FIXTURE_DIR = Path("backend-go/testdata")
+FIXTURE_DIR = Path("backend/testdata")

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // stubFetcher stands in for *forecast.Client, counting fetches so a warm-up

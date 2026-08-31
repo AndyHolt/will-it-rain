@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AndyHolt/will-it-rain/backend-go/internal/forecast"
+	"github.com/AndyHolt/will-it-rain/backend/internal/forecast"
 )
 
 // The fixture readers below duplicate a few lines of internal/forecast's test
