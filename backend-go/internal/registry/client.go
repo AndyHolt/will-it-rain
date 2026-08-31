@@ -28,7 +28,7 @@ const (
 // service is running in.
 type Config struct {
 	// Region is the Vertex region, e.g. "europe-west2", populated from the
-	// LOCATION env var that cloud_run.tf injects. Required — ADC carries a
+	// REGION env var that cloud_run.tf injects. Required — ADC carries a
 	// project but never a region, so it cannot be discovered.
 	Region string
 
@@ -41,7 +41,7 @@ type Config struct {
 
 func (c *Config) applyDefaults() error {
 	if c.Region == "" {
-		return errors.New("registry.Config.Region is required: set LOCATION")
+		return errors.New("registry.Config.Region is required: set REGION")
 	}
 	if c.ModelDisplayName == "" {
 		c.ModelDisplayName = defaultModelDisplayName
@@ -66,7 +66,7 @@ type Client struct {
 
 // New resolves credentials and returns a Client addressing cfg.Region.
 //
-// Config is validated before credentials are touched, so a missing LOCATION
+// Config is validated before credentials are touched, so a missing REGION
 // fails on its own terms rather than behind an authentication error.
 func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err := cfg.applyDefaults(); err != nil {

@@ -11,7 +11,7 @@ import (
 // "missing coordinate" case pass for the wrong reason.
 func setEnv(t *testing.T, env map[string]string) {
 	t.Helper()
-	for _, name := range []string{"LATITUDE", "LONGITUDE", "LOCATION", "MODEL_DISPLAY_NAME", "PORT"} {
+	for _, name := range []string{"LATITUDE", "LONGITUDE", "REGION", "MODEL_DISPLAY_NAME", "PORT"} {
 		t.Setenv(name, env[name])
 	}
 }
@@ -20,7 +20,7 @@ func validEnv() map[string]string {
 	return map[string]string{
 		"LATITUDE":  "55.9533",
 		"LONGITUDE": "-3.1883",
-		"LOCATION":  "europe-west2",
+		"REGION":    "europe-west2",
 	}
 }
 
@@ -79,9 +79,9 @@ func TestLoadConfigRequiresItsDeploymentVariables(t *testing.T) {
 		env     map[string]string
 		wantErr string
 	}{
-		{"no latitude", map[string]string{"LONGITUDE": "-3.1883", "LOCATION": "europe-west2"}, "LATITUDE is not set"},
-		{"no longitude", map[string]string{"LATITUDE": "55.9533", "LOCATION": "europe-west2"}, "LONGITUDE is not set"},
-		{"no location", map[string]string{"LATITUDE": "55.9533", "LONGITUDE": "-3.1883"}, "LOCATION is not set"},
+		{"no latitude", map[string]string{"LONGITUDE": "-3.1883", "REGION": "europe-west2"}, "LATITUDE is not set"},
+		{"no longitude", map[string]string{"LATITUDE": "55.9533", "REGION": "europe-west2"}, "LONGITUDE is not set"},
+		{"no region", map[string]string{"LATITUDE": "55.9533", "LONGITUDE": "-3.1883"}, "REGION is not set"},
 	}
 
 	for _, tc := range cases {

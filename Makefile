@@ -190,15 +190,15 @@ prek: ## prek run --all-files
 # from GCS. Requires gcloud ADC (`gcloud auth application-default login`) for
 # Vertex + GCS access.
 #
-# LOCATION is what the service calls the region; config.env uses the Makefile /
-# TF_VAR_ name, so map it here. In deployment cloud_run.tf sets the service-side
-# name directly and nothing maps.
+# REGION passes straight through: the service, config.env and the TF_VAR_ all
+# call it the same thing now, so nothing maps. cloud_run.tf sets it directly in
+# deployment.
 #
-# PROJECT is passed too, though cloud_run.tf deliberately leaves it unset: on
-# Cloud Run the metadata server hands internal/registry a project through ADC,
-# but user ADC from `gcloud auth application-default login` often carries none,
-# and the service then refuses to start rather than guess. The env var is the
-# override the resolver checks first.
+# PROJECT is passed too, though cloud_run.tf leaves it unset: on Cloud Run the
+# metadata server hands internal/registry a project through ADC, but user ADC
+# from `gcloud auth application-default login` often carries none, and the
+# service then refuses to start rather than guess. The env var is the override
+# the resolver checks first.
 #
 # LATITUDE / LONGITUDE come from the gitignored .env (see .env-example). The Go
 # binary reads the environment and nothing else — no dotenv support, because
@@ -211,7 +211,7 @@ prek: ## prek run --all-files
 backend-dev: ## Go prediction server on $(BACKEND_DEV_PORT)
 	@test -f .env || { echo ".env is missing — copy .env-example and fill it in"; exit 1; }
 	set -a; . ./.env; set +a; \
-	    PROJECT=$(PROJECT_ID) LOCATION=$(REGION) PORT=$(BACKEND_DEV_PORT) \
+	    PROJECT=$(PROJECT_ID) REGION=$(REGION) PORT=$(BACKEND_DEV_PORT) \
 	    go -C backend-go run ./cmd/server
 
 # Vite dev server with HMR. The vite config proxies /api/* to the backend at

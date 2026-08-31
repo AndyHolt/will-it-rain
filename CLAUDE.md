@@ -76,7 +76,7 @@ have no defaults, and the recipes are what export them from `config.env`.
   what keeps it build- and deploy-time only. Cloud Run has no reason to set
   `PROJECT_ID`: the backend resolves its project from ADC
   (`google.auth.default()`), which works on Cloud Run, on Vertex and locally.
-  Region is the exception — ADC carries no location, so `LOCATION` stays
+  Region is the exception — ADC carries no region, so `REGION` stays
   injected by `cloud_run.tf`.
 - **`frontend/firebase.json` repeats `HOSTING_SITE_ID`** because JSON can't
   interpolate and the Firebase CLI reads the site from that file only (no
