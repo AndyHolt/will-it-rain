@@ -301,12 +301,18 @@ $(BACKEND_IMAGE_SENTINEL): $(BACKEND_IMAGE_SOURCES)
 	    .
 	@mkdir -p $(dir $@) && touch $@
 
-# Roll out a new Cloud Run revision pointing at the freshly-pushed image.
-# Use this after `backend-image` to pick up code or promoted-model changes.
-backend-deploy: $(BACKEND_IMAGE_SENTINEL)
+# Roll out a new Cloud Run revision of the `backend` service. It serves the Go
+# image (cloud_run.tf), so that is the image this pushes and the sentinel it
+# depends on — deploying $(BACKEND_IMAGE_NAME) here would put the Python
+# backend back on the live service. Use it after `backend-go-image` to pick up
+# code or promoted-model changes.
+#
+# It differs from `backend-go-deploy` only in which service it targets; the two
+# collapse into one when backend-go is destroyed.
+backend-deploy: $(BACKEND_GO_IMAGE_SENTINEL)
 	gcloud run services update $(BACKEND_SERVICE) \
 	    --region=$(REGION) \
-	    --image=$(IMAGE_REPO)/$(BACKEND_IMAGE_NAME):$(BACKEND_IMAGE_TAG)
+	    --image=$(IMAGE_REPO)/$(BACKEND_GO_IMAGE_NAME):$(BACKEND_GO_IMAGE_TAG)
 
 # ---------------------------------------------------------------------------
 # Go backend build / deploy
