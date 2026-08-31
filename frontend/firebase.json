@@ -7,7 +7,7 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "backend-go",
+          "serviceId": "backend",
           "region": "europe-west2"
         }
       },
