@@ -50,7 +50,7 @@ resource "google_project_iam_member" "pipeline_log_writer" {
 resource "google_service_account" "backend" {
   account_id   = "backend"
   display_name = "Cloud Run backend"
-  description  = "Runtime SA for the FastAPI backend; reads model registry + artefacts."
+  description  = "Runtime SA for the backend; reads model registry + artefacts."
 }
 
 resource "google_project_iam_member" "backend_aiplatform_user" {

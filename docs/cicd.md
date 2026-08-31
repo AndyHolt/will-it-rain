@@ -14,9 +14,9 @@ Workflows under `.github/workflows/`:
 
 Each job is gated on the path filter for its component:
 
-1. `changes` — dorny/paths-filter → `pipeline` / `backend` / `backend_go` /
-   `frontend` / `infra` / `model_refresher` booleans.
-2. `build-pipeline-image`, `build-backend-image`, `build-backend-go-image` —
+1. `changes` — dorny/paths-filter → `pipeline` / `backend_go` / `frontend` /
+   `infra` / `model_refresher` booleans.
+2. `build-pipeline-image`, `build-backend-go-image` —
    `docker buildx … --push :latest`.
 3. `compile-and-upload-pipeline` — `make compile-pipeline` + `make upload-pipeline`.
 4. `terraform-apply` — runs when pipeline, infra **or** model_refresher changed.
@@ -34,14 +34,10 @@ The deploy jobs call `gcloud` directly rather than `make backend-deploy`: that
 recipe depends on the image sentinel under `build/`, which doesn't exist on a
 fresh runner, so make would rebuild the image the build job just pushed.
 
-`backend_go`'s filter is narrower than `backend`'s — no `will_it_rain_shared/**`,
-no `pyproject.toml`, no `uv.lock`. `backend-go/` is a self-contained Go module
-and none of those are inputs to its image. Tests for it run in `go.yml`, not
-here; `deploy.yml` only builds and rolls it.
-
-The `backend` filter now gates a build and nothing else: no service runs the
-Python image, so `backend/**` and `will_it_rain_shared/**` changes reach
-`build-backend-image` and stop there. Both go with the Python backend.
+`backend_go`'s filter is narrower than `pipeline`'s — no
+`will_it_rain_shared/**`, no `pyproject.toml`, no `uv.lock`. `backend-go/` is a
+self-contained Go module and none of those are inputs to its image. Tests for
+it run in `go.yml`, not here; `deploy.yml` only builds and rolls it.
 
 `config.env` is in **every** path filter. It names the project everything
 deploys to, so a change to it invalidates every artefact — images would land in

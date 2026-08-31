@@ -12,9 +12,11 @@ uv workspace, single `uv.lock` at root.
 
 Most of the layout reads fine from `ls`. These parts don't:
 
-- **`will_it_rain_shared/`** is imported by *both* the pipeline (train) and the
-  backend (serve). Anything whose drift between the two would break predictions
-  belongs in this package — that's the whole reason it exists.
+- **`will_it_rain_shared/`** is the Python side of the train/serve contract.
+  Only the pipeline imports it now — the backend is Go and reimplements
+  feature building and scoring — so the drift that would break predictions is
+  cross-language. `golden_fixtures/` is what pins it: it computes expected
+  outputs through this package for `backend-go`'s tests to assert against.
 - **`infra/bootstrap/` vs `infra/main/`** — project-level IAM for the terraform
   SA lives in bootstrap, and changes there need a manual
   `terraform -chdir=infra/bootstrap apply` as the human user. See
@@ -41,10 +43,11 @@ done; `make fix` applies every auto-fixer. Recipes are split `py-*` /
 Recipes that hit GCP are **deliberately absent from `make help`** so they aren't
 one tab-complete away, but they exist: `image`, `compile-pipeline`,
 `upload-pipeline`, `deploy-pipeline`, `trigger-pipeline-from-local`,
-`trigger-pipeline-via-scheduler`, `clean`, `backend-image`, `backend-deploy`,
-`backend-go-image`, `frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the Makefile for the
-current set. `golden-fixtures` is hidden for a different reason — it needs no
-GCP, but it retrains a model and rewrites checked-in fixtures.
+`trigger-pipeline-via-scheduler`, `clean`, `backend-go-image`,
+`backend-deploy`, `frontend-deploy`, `tf-init`, `tf-plan`, `tf-apply`. Read the
+Makefile for the current set. `golden-fixtures` is hidden for a different
+reason — it needs no GCP, but it retrains a model and rewrites checked-in
+fixtures.
 
 Run Terraform through `make tf-plan` / `make tf-apply` rather than
 `terraform -chdir=…` directly: `project_id`, `region` and `hosting_site_id`
@@ -71,13 +74,12 @@ have no defaults, and the recipes are what export them from `config.env`.
   that layout for new env-driven config. Don't confuse it with `config.env`,
   which is committed: `.env` is for what must stay out of version control,
   `config.env` for what must be *in* it.
-- **Serving code must not import `will_it_rain_shared/gcp.py`.** It has no
+- **`will_it_rain_shared/gcp.py` is build- and deploy-time only.** It has no
   defaults, so it raises without `PROJECT_ID` in the environment — which is
-  what keeps it build- and deploy-time only. Cloud Run has no reason to set
-  `PROJECT_ID`: the backend resolves its project from ADC
-  (`google.auth.default()`), which works on Cloud Run, on Vertex and locally.
-  Region is the exception — ADC carries no region, so `REGION` stays
-  injected by `cloud_run.tf`.
+  what keeps it that way. Cloud Run has no reason to set `PROJECT_ID`: the
+  backend resolves its project from the ADC the metadata server hands it,
+  which works on Cloud Run, on Vertex and locally. Region is the exception —
+  ADC carries no region, so `REGION` stays injected by `cloud_run.tf`.
 - **`frontend/firebase.json` repeats `HOSTING_SITE_ID`** because JSON can't
   interpolate and the Firebase CLI reads the site from that file only (no
   `--site` flag, no env override). Drift is *silent*: with no matching `site`,

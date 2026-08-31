@@ -9,7 +9,9 @@ Three layers are recorded, because a parity failure is far easier to place
 when the innermost stage that disagrees is visible: the forecast parsed into
 its canonical column map, the feature vector assembled at the anchor, and the
 prediction itself. Scoring goes through ``shared.predict.predict_from_model``,
-the same function the Python backend serves from.
+which is the function the Python backend served from. With that backend
+deleted this package is its only caller: it survives as the reference the Go
+scoring is checked against.
 
 NaN is written as JSON ``null``: the JSON spec has no NaN literal, Python's
 default ``NaN`` output is invalid JSON, and Go's ``encoding/json`` would

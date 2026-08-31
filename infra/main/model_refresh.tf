@@ -163,11 +163,10 @@ resource "google_cloudfunctions2_function" "model_refresher" {
     service_account_email = google_service_account.refresher.email
 
     # BACKEND_SERVICES is comma-separated: the function refreshes every
-    # service named. The blue/green migration listed both backends here; now
-    # that hosting is back on `backend` and backend-go is being torn down,
-    # there is one again. The plural stays because the function's contract is a
-    # list — adding a second service is an edit here, not a change to the
-    # function.
+    # service named. The blue/green migration listed both backends here; with
+    # the green service destroyed there is one again. The plural stays because
+    # the function's contract is a list — adding a second service is an edit
+    # here, not a change to the function.
     environment_variables = {
       PROJECT          = var.project_id
       REGION           = var.region

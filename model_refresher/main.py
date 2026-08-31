@@ -9,8 +9,10 @@ which forces a new Cloud Run revision. The new revision re-resolves
 ``@production`` at startup and loads the freshly-promoted model.
 
 ``BACKEND_SERVICES`` is a comma-separated list because the Python→Go backend
-migration runs two services side by side for the length of the blue/green
-window, and both must follow a promotion. Outside that window it names one.
+migration ran two services side by side for the length of the blue/green
+window, and both had to follow a promotion. It names one again. The plural
+stays because the contract is a list: adding a service is an edit to
+``model_refresh.tf``, not a change here.
 
 We can't hot-reload the model inside the existing backend instances over
 Pub/Sub: a push delivery hits exactly one instance, leaving any other warm

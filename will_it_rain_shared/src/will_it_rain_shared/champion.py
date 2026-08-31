@@ -1,9 +1,11 @@
 """Load the model currently aliased as ``production`` from the registry.
 
-Lives in `shared` because both the training pipeline (champion evaluation)
-and the serving backend (startup model load) consume the same on-disk
-bundle. Keeping the loader here means there is one place that knows how
-to materialise it back into a TrainedModel.
+Lives in `shared` from when a Python backend loaded the champion at startup
+as well. The pipeline (champion evaluation) is the only importer now: the Go
+backend resolves the same ``@production`` alias over the same registry APIs,
+but reads the ``model.txt`` / ``serving.json`` the train component emits
+rather than this joblib bundle. Keeping the loader here means there is one
+place that knows how to materialise the bundle back into a TrainedModel.
 """
 
 import logging

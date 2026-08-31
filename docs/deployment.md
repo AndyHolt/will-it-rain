@@ -40,14 +40,14 @@ and after that every code change needs an explicit redeploy.
 First-time bootstrap (order matters):
 
 ```
-make backend-image                     # builds + pushes :latest to AR
+make backend-go-image                  # builds + pushes :latest to AR
 make tf-apply                          # creates the Cloud Run service
 ```
 
 Subsequent code changes:
 
 ```
-make backend-image                     # rebuild + push :latest
+make backend-go-image                  # rebuild + push :latest
 make backend-deploy                    # gcloud run services update → new revision
 ```
 
